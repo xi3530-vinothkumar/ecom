@@ -102,7 +102,7 @@ public final class Containers {
 
     public static void registerElasticsearch(DynamicPropertyRegistry r) {
         var es = elasticsearch();
-        r.add("ecom.elasticsearch.url", () -> "http://" + es.getHost() + ":" + es.getMappedPort(9200));
+        r.add("spring.elasticsearch.uris", () -> "http://" + es.getHost() + ":" + es.getMappedPort(9200));
     }
 
     private Containers() {}

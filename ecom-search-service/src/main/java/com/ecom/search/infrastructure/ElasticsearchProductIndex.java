@@ -1,19 +1,13 @@
 package com.ecom.search.infrastructure;
 
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.elasticsearch._types.Conflicts;
-import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import co.elastic.clients.elasticsearch._types.FieldValue;
-import co.elastic.clients.elasticsearch._types.Script;
-import co.elastic.clients.elasticsearch._types.ScriptLanguage;
 import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch._types.aggregations.Aggregate;
 import co.elastic.clients.elasticsearch._types.aggregations.Aggregation;
 import co.elastic.clients.elasticsearch._types.query_dsl.Operator;
 import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch._types.query_dsl.TextQueryType;
-import co.elastic.clients.elasticsearch.core.SearchResponse;
-import co.elastic.clients.elasticsearch.core.search.Hit;
+import co.elastic.clients.elasticsearch.core.search.FieldCollapse;
 import co.elastic.clients.json.JsonData;
 import com.ecom.platform.core.EcomException;
 import com.ecom.search.domain.IndexUpdates;
@@ -23,6 +17,7 @@ import com.ecom.search.domain.SearchResult;
 import com.ecom.search.domain.SearchResult.FacetBucket;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -35,24 +30,40 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.dao.DataAccessException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.elasticsearch.client.elc.ElasticsearchAggregations;
+import org.springframework.data.elasticsearch.client.elc.NativeQuery;
+import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
+import org.springframework.data.elasticsearch.core.IndexOperations;
+import org.springframework.data.elasticsearch.core.RefreshPolicy;
+import org.springframework.data.elasticsearch.core.SearchHit;
+import org.springframework.data.elasticsearch.core.SearchHits;
+import org.springframework.data.elasticsearch.core.document.Document;
+import org.springframework.data.elasticsearch.core.mapping.IndexCoordinates;
+import org.springframework.data.elasticsearch.core.query.DeleteQuery;
+import org.springframework.data.elasticsearch.core.query.FetchSourceFilter;
+import org.springframework.data.elasticsearch.core.query.UpdateQuery;
+import org.springframework.data.elasticsearch.core.query.types.ConflictsType;
 import org.springframework.stereotype.Component;
 
-/** All Elasticsearch access for the {@code products} index. */
+/** All Elasticsearch access for the {@code products} index, via Spring Data Elasticsearch. */
 @Component
 public class ElasticsearchProductIndex implements InitializingBean {
 
     private static final Logger log = LoggerFactory.getLogger(ElasticsearchProductIndex.class);
     private static final String MAPPING = "elasticsearch/products-index.json";
+    private static final String PAINLESS = "painless";
     private static final int RETRY_ON_CONFLICT = 5;
     private static final int FACET_SIZE = 50;
     static final List<String> FACETS = List.of("categoryId", "brand", "inStock");
 
-    private final ElasticsearchClient client;
-    private final String index;
+    private final ElasticsearchOperations operations;
+    private final IndexCoordinates index;
 
-    public ElasticsearchProductIndex(ElasticsearchClient client, SearchProperties props) {
-        this.client = client;
-        this.index = props.index();
+    public ElasticsearchProductIndex(ElasticsearchOperations operations, SearchProperties props) {
+        this.operations = operations;
+        this.index = IndexCoordinates.of(props.index());
     }
 
     /** Runs during context refresh, i.e. before Kafka listener containers start consuming. */
@@ -63,9 +74,9 @@ public class ElasticsearchProductIndex implements InitializingBean {
             try {
                 ensureIndex();
                 return;
-            } catch (IOException | RuntimeException e) {
+            } catch (RuntimeException e) {
                 if (i == attempts) {
-                    throw new IllegalStateException("Cannot initialize Elasticsearch index " + index, e);
+                    throw new IllegalStateException("Cannot initialize Elasticsearch index " + index.getIndexName(), e);
                 }
                 log.warn("Elasticsearch not ready (attempt {}/{}): {}", i, attempts, e.toString());
                 Thread.sleep(3_000);
@@ -73,16 +84,18 @@ public class ElasticsearchProductIndex implements InitializingBean {
         }
     }
 
-    void ensureIndex() throws IOException {
-        if (client.indices().exists(e -> e.index(index)).value()) {
+    void ensureIndex() {
+        IndexOperations indexOps = operations.indexOps(index);
+        if (indexOps.exists()) {
             return;
         }
-        try (InputStream in = new ClassPathResource(MAPPING).getInputStream()) {
-            client.indices().create(c -> c.index(index).withJson(in));
-            log.info("Created Elasticsearch index {}", index);
-        } catch (ElasticsearchException e) {
+        Document definition = readDefinition();
+        try {
+            indexOps.create(Document.from(nested(definition, "settings")), Document.from(nested(definition, "mappings")));
+            log.info("Created Elasticsearch index {}", index.getIndexName());
+        } catch (DataAccessException e) {
             // another replica won the race
-            if (!"resource_already_exists_exception".equals(e.error().type())) {
+            if (!String.valueOf(e.getMessage()).contains("resource_already_exists_exception")) {
                 throw e;
             }
         }
@@ -106,12 +119,10 @@ public class ElasticsearchProductIndex implements InitializingBean {
      */
     public long tombstoneOtherSkus(String productId, Collection<String> keep, long version, Map<String, Object> params) {
         try {
-            client.indices().refresh(r -> r.index(index));
+            operations.indexOps(index).refresh();
             List<FieldValue> keepValues = keep.stream().map(FieldValue::of).toList();
-            var response = client.updateByQuery(u -> u.index(index)
-                    .conflicts(Conflicts.Proceed)
-                    .refresh(true)
-                    .query(q -> q.bool(b -> {
+            var query = NativeQuery.builder()
+                    .withQuery(q -> q.bool(b -> {
                         b.filter(f -> f.term(t -> t.field("productId").value(FieldValue.of(productId))));
                         b.filter(f -> f.exists(e -> e.field("name")));
                         b.filter(f -> f.range(r -> r.untyped(ur -> ur.field("catalogVersion").lt(JsonData.of(version)))));
@@ -120,18 +131,24 @@ public class ElasticsearchProductIndex implements InitializingBean {
                         }
                         return b;
                     }))
-                    .script(script(IndexUpdates.CATALOG_TOMBSTONE, params)));
-            return response.updated() == null ? 0 : response.updated();
-        } catch (IOException e) {
+                    .build();
+            var update = UpdateQuery.builder(query)
+                    .withScript(IndexUpdates.CATALOG_TOMBSTONE)
+                    .withLang(PAINLESS)
+                    .withParams(nonNull(params))
+                    .withAbortOnVersionConflict(false)
+                    .withRefreshPolicy(RefreshPolicy.IMMEDIATE)
+                    .build();
+            return operations.updateByQuery(update, index).getUpdated();
+        } catch (DataAccessException e) {
             throw unavailable(e);
         }
     }
 
     public Optional<SearchDocument> get(String sku) {
         try {
-            var response = client.get(g -> g.index(index).id(sku), SearchDocument.class);
-            return response.found() ? Optional.ofNullable(response.source()) : Optional.empty();
-        } catch (IOException e) {
+            return Optional.ofNullable(operations.get(sku, SearchDocument.class, index));
+        } catch (DataAccessException e) {
             throw unavailable(e);
         }
     }
@@ -139,22 +156,25 @@ public class ElasticsearchProductIndex implements InitializingBean {
     /** Deletes stubs and tombstones (docs without catalog data) not touched since {@code cutoff}. */
     public long purgeOrphans(Instant cutoff) {
         try {
-            var response = client.deleteByQuery(d -> d.index(index)
-                    .conflicts(Conflicts.Proceed)
-                    .refresh(true)
-                    .query(q -> q.bool(b -> b
+            var query = NativeQuery.builder()
+                    .withQuery(q -> q.bool(b -> b
                             .mustNot(m -> m.exists(e -> e.field("name")))
-                            .filter(f -> f.range(r -> r.untyped(ur -> ur.field("lastUpdated").lt(JsonData.of(cutoff.toEpochMilli()))))))));
-            return response.deleted() == null ? 0 : response.deleted();
-        } catch (IOException e) {
+                            .filter(f -> f.range(r -> r.untyped(ur -> ur.field("lastUpdated").lt(JsonData.of(cutoff.toEpochMilli())))))))
+                    .build();
+            var delete = DeleteQuery.builder(query)
+                    .withConflicts(ConflictsType.Proceed)
+                    .withRefresh(true)
+                    .build();
+            return operations.delete(delete, SearchDocument.class, index).getDeleted();
+        } catch (DataAccessException e) {
             throw unavailable(e);
         }
     }
 
     public void refresh() {
         try {
-            client.indices().refresh(r -> r.index(index));
-        } catch (IOException e) {
+            operations.indexOps(index).refresh();
+        } catch (DataAccessException e) {
             throw unavailable(e);
         }
     }
@@ -170,65 +190,60 @@ public class ElasticsearchProductIndex implements InitializingBean {
         if (query.inStock() != null) {
             filters.put("inStock", term("inStock", FieldValue.of(query.inStock())));
         }
-        Map<String, Aggregation> aggs = new LinkedHashMap<>();
+        var builder = NativeQuery.builder()
+                .withQuery(visible(textQuery(query.text())))
+                .withPageable(PageRequest.of(query.page(), query.size()))
+                .withTrackTotalHits(true)
+                .withSort(o -> o.score(sc -> sc.order(SortOrder.Desc)))
+                .withSort(o -> o.field(f -> f.field("name.keyword").order(SortOrder.Asc)))
+                .withSort(o -> o.field(f -> f.field("sku").order(SortOrder.Asc)));
         // multi-select faceting: each facet is counted under every filter except its own
         for (String facet : FACETS) {
             List<Query> others = filters.entrySet().stream()
                     .filter(e -> !e.getKey().equals(facet))
                     .map(Map.Entry::getValue)
                     .toList();
-            aggs.put(facet, Aggregation.of(a -> a
+            builder.withAggregation(facet, Aggregation.of(a -> a
                     .filter(f -> f.bool(b -> b.filter(others)))
                     .aggregations("values", sub -> sub.terms(t -> t.field(facet).size(FACET_SIZE)))));
         }
+        if (!filters.isEmpty()) {
+            builder.withFilter(p -> p.bool(b -> b.filter(new ArrayList<>(filters.values()))));
+        }
         try {
-            SearchResponse<SearchDocument> response = client.search(s -> {
-                s.index(index)
-                        .query(visible(textQuery(query.text())))
-                        .from(query.from())
-                        .size(query.size())
-                        .trackTotalHits(t -> t.enabled(true))
-                        .aggregations(aggs)
-                        .sort(o -> o.score(sc -> sc.order(SortOrder.Desc)))
-                        .sort(o -> o.field(f -> f.field("name.keyword").order(SortOrder.Asc)))
-                        .sort(o -> o.field(f -> f.field("sku").order(SortOrder.Asc)));
-                if (!filters.isEmpty()) {
-                    s.postFilter(p -> p.bool(b -> b.filter(new ArrayList<>(filters.values()))));
-                }
-                return s;
-            }, SearchDocument.class);
-            List<SearchDocument> items = response.hits().hits().stream().map(Hit::source).toList();
-            long total = response.hits().total() == null ? items.size() : response.hits().total().value();
+            SearchHits<SearchDocument> hits = operations.search(builder.build(), SearchDocument.class, index);
+            List<SearchDocument> items = hits.getSearchHits().stream().map(SearchHit::getContent).toList();
+            var aggregations = (ElasticsearchAggregations) hits.getAggregations();
             Map<String, List<FacetBucket>> facets = new LinkedHashMap<>();
             for (String facet : FACETS) {
-                facets.put(facet, buckets(response.aggregations().get(facet)));
+                var aggregation = aggregations == null ? null : aggregations.get(facet);
+                facets.put(facet, buckets(aggregation == null ? null : aggregation.aggregation().getAggregate()));
             }
-            return new SearchResult(items, total, query.page(), query.size(), facets);
-        } catch (IOException e) {
-            throw unavailable(e);
-        } catch (ElasticsearchException e) {
-            throw EcomException.unavailable("Search failed: " + e.error().type(), e);
+            return new SearchResult(items, hits.getTotalHits(), query.page(), query.size(), facets);
+        } catch (DataAccessException e) {
+            throw EcomException.unavailable("Search failed", e);
         }
     }
 
     /** Distinct product names matching {@code prefix} as-you-type, best first. */
     public List<String> suggest(String prefix, int limit) {
         try {
-            var response = client.search(s -> s.index(index)
-                    .size(limit)
-                    .query(visible(Query.of(q -> q.match(m -> m.field("name.autocomplete")
+            var query = NativeQuery.builder()
+                    .withQuery(visible(Query.of(q -> q.match(m -> m.field("name.autocomplete")
                             .query(FieldValue.of(prefix))
                             .operator(Operator.And)))))
-                    .collapse(c -> c.field("productId"))
-                    .source(src -> src.filter(f -> f.includes("name"))), SearchDocument.class);
+                    .withMaxResults(limit)
+                    .withFieldCollapse(FieldCollapse.of(c -> c.field("productId")))
+                    .withSourceFilter(new FetchSourceFilter(true, new String[] {"name"}, null))
+                    .build();
             LinkedHashSet<String> names = new LinkedHashSet<>();
-            response.hits().hits().forEach(h -> {
-                if (h.source() != null && h.source().name() != null) {
-                    names.add(h.source().name());
+            operations.search(query, SearchDocument.class, index).forEach(h -> {
+                if (h.getContent() != null && h.getContent().name() != null) {
+                    names.add(h.getContent().name());
                 }
             });
             return names.stream().limit(limit).toList();
-        } catch (IOException e) {
+        } catch (DataAccessException e) {
             throw unavailable(e);
         }
     }
@@ -278,30 +293,46 @@ public class ElasticsearchProductIndex implements InitializingBean {
     }
 
     private void scriptedUpsert(String sku, String source, Map<String, Object> params) {
-        Map<String, Object> emptyDoc = Map.of();
+        var update = UpdateQuery.builder(sku)
+                .withScript(source)
+                .withLang(PAINLESS)
+                .withParams(nonNull(params))
+                .withScriptedUpsert(true)
+                .withUpsert(Document.create())
+                .withRetryOnConflict(RETRY_ON_CONFLICT)
+                .build();
         try {
-            client.update(u -> u.index(index)
-                    .id(sku)
-                    .script(script(source, params))
-                    .scriptedUpsert(true)
-                    .upsert(emptyDoc)
-                    .retryOnConflict(RETRY_ON_CONFLICT), Map.class);
-        } catch (IOException e) {
+            operations.update(update, index);
+        } catch (DataAccessException e) {
             throw unavailable(e);
         }
     }
 
-    private static Script script(String source, Map<String, Object> params) {
-        Map<String, JsonData> json = new LinkedHashMap<>();
+    /** Null params are left out, so scripts see them as absent rather than JSON null. */
+    private static Map<String, Object> nonNull(Map<String, Object> params) {
+        Map<String, Object> copy = new LinkedHashMap<>();
         params.forEach((k, v) -> {
             if (v != null) {
-                json.put(k, JsonData.of(v));
+                copy.put(k, v);
             }
         });
-        return Script.of(s -> s.lang(ScriptLanguage.Painless).source(src -> src.scriptString(source)).params(json));
+        return copy;
     }
 
-    private static EcomException unavailable(IOException e) {
+    private static Document readDefinition() {
+        try (InputStream in = new ClassPathResource(MAPPING).getInputStream()) {
+            return Document.parse(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            throw new IllegalStateException("Cannot read " + MAPPING, e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> nested(Document definition, String key) {
+        return (Map<String, Object>) definition.get(key);
+    }
+
+    private static EcomException unavailable(DataAccessException e) {
         return EcomException.unavailable("Elasticsearch unavailable", e);
     }
 }
