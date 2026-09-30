@@ -82,7 +82,7 @@ stored in the (encrypted) state.
 - Redis: TLS + AUTH → `SPRING_DATA_REDIS_SSL_ENABLED=true`, `SPRING_DATA_REDIS_PASSWORD` from `ecom/<env>/redis`.
 - RDS enforces TLS (`rds.force_ssl=1`): `DB_URL=jdbc:postgresql://<rds_address>:5432/<svc>db?sslmode=require`.
 - Elasticsearch: `ELASTICSEARCH_URL` = `elasticsearch_url` output (HTTPS 443 over PrivateLink) and
-  `ELASTICSEARCH_API_KEY` from `ecom/<env>/search/elasticsearch` (key `api_key`).
+  `SPRING_ELASTICSEARCH_API_KEY` from `ecom/<env>/search/elasticsearch` (key `api_key`).
 - ECR tags are IMMUTABLE: push unique tags (git SHA), never re-push `latest`.
 
 ## Migrating an existing env from Amazon OpenSearch to Elastic Cloud
