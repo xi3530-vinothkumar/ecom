@@ -1,6 +1,13 @@
 spring:
   application:
     name: catalog-service
+  cloud:
+    aws:
+      region:
+        static: ${AWS_REGION:eu-west-1}
+      s3:
+        # S3 clients only when product images are enabled
+        enabled: ${IMAGES_ENABLED:false}
   grpc:
     server:
       port: ${GRPC_PORT:9092}

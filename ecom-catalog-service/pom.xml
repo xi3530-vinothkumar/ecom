@@ -51,8 +51,8 @@
         </dependency>
         <!-- product images: pre-signed S3 PUT URLs -->
         <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>s3</artifactId>
+            <groupId>io.awspring.cloud</groupId>
+            <artifactId>spring-cloud-aws-starter-s3</artifactId>
         </dependency>
         <!-- IRSA (web identity token) support for the default credentials chain on EKS -->
         <dependency>
