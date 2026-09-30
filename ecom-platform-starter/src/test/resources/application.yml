@@ -9,4 +9,5 @@ ecom:
     poll-interval: 100ms
 management:
   tracing:
-    enabled: false
+    export:
+      enabled: false

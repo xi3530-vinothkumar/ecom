@@ -24,8 +24,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -45,6 +46,7 @@ import org.springframework.test.context.DynamicPropertySource;
             "spring.profiles.active=plain-logs"
         })
 @Import(PaymentItConfig.class)
+@AutoConfigureTestRestTemplate
 public abstract class PaymentIntegrationTestBase {
 
     protected static final Duration TIMEOUT = Duration.ofSeconds(30);

@@ -10,17 +10,19 @@ spring:
       timeout: 500ms
   cloud:
     gateway:
-      httpclient:
-        connect-timeout: 2000
-        response-timeout: 15s
-      filter:
-        # grpc-api arrives transitively via ecom-platform-starter (proto contracts); the Gateway
-        # is a pure HTTP proxy and the JSON->gRPC filter would need unshaded grpc-netty
-        json-to-grpc:
-          enabled: false
-        request-rate-limiter:
-          # a key always exists (user id or IP); keep the default deny for safety
-          deny-empty-key: true
+      server:
+        webflux:
+          httpclient:
+            connect-timeout: 2000
+            response-timeout: 15s
+          filter:
+            # grpc-api arrives transitively via ecom-platform-starter (proto contracts); the Gateway
+            # is a pure HTTP proxy and the JSON->gRPC filter would need unshaded grpc-netty
+            json-to-grpc:
+              enabled: false
+            request-rate-limiter:
+              # a key always exists (user id or IP); keep the default deny for safety
+              deny-empty-key: true
 server:
   port: ${HTTP_PORT:8080}
   max-http-request-header-size: 16KB

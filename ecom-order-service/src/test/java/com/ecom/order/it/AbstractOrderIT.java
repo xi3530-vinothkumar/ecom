@@ -12,8 +12,9 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -32,8 +33,9 @@ import org.springframework.test.context.DynamicPropertySource;
             "ecom.grpc.server.port=0",
             "ecom.outbox.poll-interval=100ms",
             "ecom.order.pending-stale-refresh=1h",
-            "management.tracing.enabled=false"
+            "management.tracing.export.enabled=false"
         })
+@AutoConfigureTestRestTemplate
 abstract class AbstractOrderIT {
 
     static final Duration TIMEOUT = Duration.ofSeconds(30);

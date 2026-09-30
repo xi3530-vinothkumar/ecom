@@ -26,7 +26,7 @@ import org.springframework.test.context.DynamicPropertySource;
             "ecom.grpc.server.port=0",
             "ecom.inventory.sweep-enabled=false",
             "ecom.outbox.poll-interval=100ms",
-            "management.tracing.enabled=false"
+            "management.tracing.export.enabled=false"
         })
 abstract class AbstractInventoryIT {
 

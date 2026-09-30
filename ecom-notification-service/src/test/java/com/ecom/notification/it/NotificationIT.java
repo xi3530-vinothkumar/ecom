@@ -45,7 +45,7 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest(
         classes = {NotificationServiceApplication.class, NotificationIT.RecordingSenderConfig.class},
         webEnvironment = SpringBootTest.WebEnvironment.NONE,
-        properties = {"ecom.outbox.poll-interval=1s", "management.tracing.enabled=false"})
+        properties = {"ecom.outbox.poll-interval=1s", "management.tracing.export.enabled=false"})
 class NotificationIT {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
