@@ -12,6 +12,9 @@ spring:
             deadline: 2s
           keepalive:
             time: 30s
+  cache:
+    # Redis is on the classpath for carts; the catalog L1 cache is in-process
+    type: caffeine
   data:
     redis:
       host: ${REDIS_HOST:localhost}
