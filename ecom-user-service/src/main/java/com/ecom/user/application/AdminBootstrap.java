@@ -30,7 +30,7 @@ public class AdminBootstrap implements ApplicationRunner {
         try {
             boolean created = registration.ensureAdmin(props.adminEmail(), props.adminPassword());
             log.info(created ? "Bootstrap admin account created" : "Bootstrap admin account already present");
-        } catch (EcomException | DataIntegrityViolationException e) {
+        } catch (EcomException | DataIntegrityViolationException _) {
             // another replica created it concurrently; the next start converges the roles
             log.info("Bootstrap admin created concurrently by another instance");
         }

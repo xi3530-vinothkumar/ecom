@@ -15,7 +15,7 @@ public record ProductChangedPayload(
         String brand,
         boolean active,
         long version,
-        List<Variant> variants) {
+        List<Variant> variants) implements EventPayload {
 
     public record Variant(String sku, String variantName, Money price) {}
 }

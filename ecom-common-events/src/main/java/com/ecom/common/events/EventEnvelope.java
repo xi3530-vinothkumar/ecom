@@ -1,5 +1,6 @@
 package com.ecom.common.events;
 
+import com.ecom.common.events.payload.EventPayload;
 import java.time.Instant;
 import java.util.UUID;
 import tools.jackson.core.JacksonException;
@@ -20,7 +21,7 @@ public record EventEnvelope(
         String producerService,
         JsonNode payload) {
 
-    public <T> T payloadAs(ObjectMapper mapper, Class<T> type) {
+    public <T extends EventPayload> T payloadAs(ObjectMapper mapper, Class<T> type) {
         try {
             return mapper.treeToValue(payload, type);
         } catch (JacksonException e) {

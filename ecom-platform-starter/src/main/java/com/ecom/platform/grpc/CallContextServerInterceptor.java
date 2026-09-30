@@ -74,7 +74,7 @@ public class CallContextServerInterceptor implements ServerInterceptor {
     private static void closeQuietly(ServerCall<?, ?> call, Status status) {
         try {
             call.close(status, new Metadata());
-        } catch (IllegalStateException alreadyClosed) {
+        } catch (IllegalStateException _) {
             // call already completed; nothing to do
         }
     }

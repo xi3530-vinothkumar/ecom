@@ -151,7 +151,10 @@ public class RedisCartStore {
     }
 
     private String ttlSeconds(CartOwner owner) {
-        return owner instanceof CartOwner.Guest ? Long.toString(props.guestTtl().toSeconds()) : "0";
+        return switch (owner) {
+            case CartOwner.Guest _ -> Long.toString(props.guestTtl().toSeconds());
+            case CartOwner.User _ -> "0";
+        };
     }
 
     private static Map<String, Integer> toQuantities(Map<?, ?> raw) {
@@ -159,7 +162,7 @@ public class RedisCartStore {
         raw.forEach((k, v) -> {
             try {
                 out.put(String.valueOf(k), Integer.parseInt(String.valueOf(v)));
-            } catch (NumberFormatException e) {
+            } catch (NumberFormatException _) {
                 log.warn("Ignoring malformed cart line {}={}", k, v);
             }
         });

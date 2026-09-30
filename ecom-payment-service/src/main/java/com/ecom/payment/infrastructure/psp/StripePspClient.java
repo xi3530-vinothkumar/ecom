@@ -149,7 +149,7 @@ public class StripePspClient implements PspClient {
     private JsonNode readJson(byte[] bytes) {
         try {
             return mapper.readTree(bytes);
-        } catch (JacksonException e) {
+        } catch (JacksonException _) {
             return mapper.createObjectNode();
         }
     }

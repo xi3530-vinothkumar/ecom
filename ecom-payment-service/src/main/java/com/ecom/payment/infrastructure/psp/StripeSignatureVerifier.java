@@ -53,7 +53,7 @@ public class StripeSignatureVerifier {
             if (key.equals("t")) {
                 try {
                     timestamp = Long.parseLong(value);
-                } catch (NumberFormatException e) {
+                } catch (NumberFormatException _) {
                     throw new InvalidSignatureException("Malformed timestamp");
                 }
             } else if (key.equals("v1")) {

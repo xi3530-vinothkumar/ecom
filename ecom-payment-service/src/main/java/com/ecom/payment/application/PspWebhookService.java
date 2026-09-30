@@ -136,7 +136,7 @@ public class PspWebhookService {
                 throw EcomException.validation("Webhook body is not a JSON object");
             }
             return node;
-        } catch (JacksonException e) {
+        } catch (JacksonException _) {
             throw EcomException.validation("Webhook body is not valid JSON");
         }
     }

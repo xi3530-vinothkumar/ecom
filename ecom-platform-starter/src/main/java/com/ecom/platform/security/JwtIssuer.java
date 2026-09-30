@@ -37,12 +37,12 @@ public class JwtIssuer {
     public JwtIssuer(JwtProperties props, Clock clock) {
         this.props = props;
         this.clock = clock;
-        RSAPrivateCrtKey privateKey = PemKeys.privateKey(props.getPrivateKeyPem());
-        RSAKey signingKey = rsaKey(props.getKeyId(), new RSAKey.Builder(PemKeys.publicKeyOf(privateKey)).privateKey(privateKey));
+        RSAPrivateCrtKey privateKey = PemKeys.privateKey(props.privateKeyPem());
+        RSAKey signingKey = rsaKey(props.keyId(), new RSAKey.Builder(PemKeys.publicKeyOf(privateKey)).privateKey(privateKey));
         this.encoder = new NimbusJwtEncoder(new ImmutableJWKSet<>(new JWKSet(signingKey)));
         List<JWK> keys = new ArrayList<>();
         keys.add(signingKey.toPublicJWK());
-        for (JwtProperties.PublicKey prev : props.getPreviousPublicKeys()) {
+        for (JwtProperties.PublicKey prev : props.previousPublicKeys()) {
             keys.add(rsaKey(prev.keyId(), new RSAKey.Builder(PemKeys.publicKey(prev.pem()))));
         }
         this.publicJwks = new JWKSet(keys);
@@ -50,18 +50,18 @@ public class JwtIssuer {
 
     public IssuedToken issue(String userId, Collection<String> roles) {
         Instant now = clock.instant();
-        Instant exp = now.plus(props.getAccessTokenTtl());
+        Instant exp = now.plus(props.accessTokenTtl());
         String jti = UUID.randomUUID().toString();
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .subject(userId)
-                .issuer(props.getIssuer())
-                .audience(List.of(props.getAudience()))
+                .issuer(props.issuer())
+                .audience(List.of(props.audience()))
                 .issuedAt(now)
                 .expiresAt(exp)
                 .id(jti)
                 .claim("roles", List.copyOf(roles))
                 .build();
-        JwsHeader header = JwsHeader.with(SignatureAlgorithm.RS256).keyId(props.getKeyId()).type("JWT").build();
+        JwsHeader header = JwsHeader.with(SignatureAlgorithm.RS256).keyId(props.keyId()).type("JWT").build();
         String token = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
         return new IssuedToken(token, jti, exp);
     }

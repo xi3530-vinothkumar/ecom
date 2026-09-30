@@ -35,7 +35,7 @@ public class CartGrpcService extends CartServiceGrpc.CartServiceImplBase {
         CartOwner.Guest guest;
         try {
             guest = new CartOwner.Guest(UUID.fromString(request.getGuestCartId()));
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             throw EcomException.validation("guest_cart_id must be a UUID");
         }
         out.onNext(toProto(user, carts.merge(guest, user)));

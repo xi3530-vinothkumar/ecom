@@ -93,7 +93,7 @@ public final class Api {
     private static JsonNode parse(String s) {
         try {
             return Json.MAPPER.readTree(s);
-        } catch (JacksonException e) {
+        } catch (JacksonException _) {
             return MissingNode.getInstance();
         }
     }

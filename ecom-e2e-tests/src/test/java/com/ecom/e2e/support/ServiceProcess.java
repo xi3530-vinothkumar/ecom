@@ -77,7 +77,7 @@ public final class ServiceProcess {
                 if (resp.statusCode() == 200) {
                     return;
                 }
-            } catch (IOException e) {
+            } catch (IOException _) {
                 // not listening yet
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -98,7 +98,7 @@ public final class ServiceProcess {
             if (!process.waitFor(25, TimeUnit.SECONDS)) {
                 process.destroyForcibly().waitFor(5, TimeUnit.SECONDS);
             }
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             process.destroyForcibly();
             Thread.currentThread().interrupt();
         }
@@ -116,7 +116,7 @@ public final class ServiceProcess {
     private static void sleep(long ms) {
         try {
             Thread.sleep(ms);
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
         }
     }

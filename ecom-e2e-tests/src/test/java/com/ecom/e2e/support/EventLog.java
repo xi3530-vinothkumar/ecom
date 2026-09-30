@@ -66,12 +66,12 @@ public final class EventLog implements AutoCloseable {
                 for (ConsumerRecord<String, String> r : consumer.poll(Duration.ofMillis(200))) {
                     try {
                         records.add(new Rec(r.topic(), r.key(), r.value(), EventEnvelope.parse(Json.MAPPER, r.value())));
-                    } catch (RuntimeException ignored) {
+                    } catch (RuntimeException _) {
                         // not an envelope (e.g. a foreign test record); ignore
                     }
                 }
             }
-        } catch (WakeupException ignored) {
+        } catch (WakeupException _) {
             // closing
         } finally {
             consumer.close(Duration.ofSeconds(2));
@@ -105,7 +105,7 @@ public final class EventLog implements AutoCloseable {
         consumer.wakeup();
         try {
             poller.join(5000);
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
         }
         producer.close(Duration.ofSeconds(2));

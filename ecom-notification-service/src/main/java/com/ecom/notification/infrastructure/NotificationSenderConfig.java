@@ -19,6 +19,6 @@ public class NotificationSenderConfig {
     @Bean
     @ConditionalOnProperty(prefix = "ecom.notification", name = "channel", havingValue = "smtp")
     NotificationSender smtpNotificationSender(JavaMailSender mail, NotificationProperties props) {
-        return new SmtpNotificationSender(mail, props.getMailFrom());
+        return new SmtpNotificationSender(mail, props.mailFrom());
     }
 }
