@@ -47,6 +47,12 @@ spring:
     template:
       # outbox relay sets traceparent itself (captured at write time) - do not overwrite it
       observation-enabled: false
+logging:
+  structured:
+    json:
+      add:
+        service: ${spring.application.name:unknown}
+      customizer: com.ecom.platform.observability.PiiMaskingJsonMembersCustomizer
 management:
   endpoints:
     web:

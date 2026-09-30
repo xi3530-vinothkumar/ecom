@@ -22,7 +22,6 @@
         <!-- only for the protoc/grpc code generators; runtime versions come from the Spring Boot BOM -->
         <grpc.version>1.83.1</grpc.version>
         <protobuf.version>4.35.1</protobuf.version>
-        <logstash-encoder.version>8.0</logstash-encoder.version>
         <os-maven-plugin.version>1.7.1</os-maven-plugin.version>
         <protobuf-maven-plugin.version>0.6.1</protobuf-maven-plugin.version>
 
@@ -70,11 +69,6 @@
                 <version>${spring-cloud-aws.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
-            </dependency>
-            <dependency>
-                <groupId>net.logstash.logback</groupId>
-                <artifactId>logstash-logback-encoder</artifactId>
-                <version>${logstash-encoder.version}</version>
             </dependency>
 
 
