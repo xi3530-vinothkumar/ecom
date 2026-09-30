@@ -12,15 +12,18 @@ import static org.mockito.Mockito.when;
 import com.ecom.platform.core.CallContext;
 import com.ecom.platform.core.EcomException;
 import com.ecom.platform.core.ErrorCode;
+import java.lang.reflect.Method;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.InvocationInterceptor;
+import org.junit.jupiter.api.extension.ReflectiveInvocationContext;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
 class ProductImageServiceTest {
@@ -31,15 +34,16 @@ class ProductImageServiceTest {
     private final CatalogImagesProperties props =
             new CatalogImagesProperties(true, "bucket", "eu-west-1", null, Duration.ofMinutes(7));
 
-    @BeforeEach
-    void admin() {
-        CallContext.set(new CallContext("c", "admin-1", Set.of(CallContext.ROLE_ADMIN)));
-    }
-
-    @AfterEach
-    void clear() {
-        CallContext.clear();
-    }
+    /** Every test runs as an admin unless it binds another caller itself. */
+    @RegisterExtension
+    final InvocationInterceptor asAdmin = new InvocationInterceptor() {
+        @Override
+        public void interceptTestMethod(
+                Invocation<Void> invocation, ReflectiveInvocationContext<Method> context, ExtensionContext extension)
+                throws Throwable {
+            CallContext.call(new CallContext("c", "admin-1", Set.of(CallContext.ROLE_ADMIN)), invocation::proceed);
+        }
+    };
 
     private ProductImageService service(ImageStorage s) {
         @SuppressWarnings("unchecked")
@@ -99,8 +103,9 @@ class ProductImageServiceTest {
 
     @Test
     void nonAdminIsForbidden() {
-        CallContext.set(new CallContext("c", "user-1", Set.of()));
-        assertThatThrownBy(() -> service(storage).requestUpload(productId, "image/png"))
-                .isInstanceOfSatisfying(EcomException.class, e -> assertThat(e.code()).isEqualTo(ErrorCode.FORBIDDEN));
+        CallContext.run(new CallContext("c", "user-1", Set.of()),
+                () -> assertThatThrownBy(() -> service(storage).requestUpload(productId, "image/png"))
+                        .isInstanceOfSatisfying(EcomException.class,
+                                e -> assertThat(e.code()).isEqualTo(ErrorCode.FORBIDDEN)));
     }
 }

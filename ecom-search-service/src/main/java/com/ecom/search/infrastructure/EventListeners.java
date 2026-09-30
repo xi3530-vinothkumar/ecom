@@ -58,11 +58,7 @@ public class EventListeners {
 
     private void handle(ConsumerRecord<String, String> rec, Consumer<EventEnvelope> handler) {
         EventEnvelope env = EventEnvelope.parse(mapper, rec.value());
-        CallContext.set(new CallContext(CorrelationIds.acceptOrGenerate(env.correlationId()), null, null));
-        try {
-            handler.accept(env);
-        } finally {
-            CallContext.clear();
-        }
+        CallContext.run(new CallContext(CorrelationIds.acceptOrGenerate(env.correlationId()), null, null),
+                () -> handler.accept(env));
     }
 }

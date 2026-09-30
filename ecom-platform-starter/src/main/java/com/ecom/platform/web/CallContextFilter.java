@@ -21,15 +21,20 @@ public class CallContextFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         String correlationId = CorrelationIds.acceptOrGenerate(request.getHeader(CallContext.HEADER_CORRELATION_ID));
         String userId = request.getHeader(CallContext.HEADER_USER_ID);
-        CallContext.set(new CallContext(
+        CallContext ctx = new CallContext(
                 correlationId,
                 userId == null || userId.isBlank() ? null : userId,
-                CallContext.parseRoles(request.getHeader(CallContext.HEADER_USER_ROLES))));
+                CallContext.parseRoles(request.getHeader(CallContext.HEADER_USER_ROLES)));
         response.setHeader(CallContext.HEADER_CORRELATION_ID, correlationId);
         try {
-            chain.doFilter(request, response);
-        } finally {
-            CallContext.clear();
+            CallContext.call(ctx, () -> {
+                chain.doFilter(request, response);
+                return null;
+            });
+        } catch (IOException | ServletException | RuntimeException | Error e) {
+            throw e;
+        } catch (Throwable e) {
+            throw new ServletException(e);
         }
     }
 }

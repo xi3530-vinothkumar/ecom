@@ -9,20 +9,15 @@ import com.ecom.platform.core.EcomException;
 import com.ecom.platform.core.ErrorCode;
 import java.util.Set;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 class CartOwnerResolverTest {
 
-    @AfterEach
-    void clear() {
-        CallContext.clear();
-    }
-
     @Test
     void authenticatedUserWinsOverGuestHeader() {
-        CallContext.set(new CallContext("c", "user-1", Set.of()));
-        assertThat(CartOwnerResolver.resolve(UUID.randomUUID().toString())).isEqualTo(new CartOwner.User("user-1"));
+        CartOwner owner = CallContext.call(new CallContext("c", "user-1", Set.of()),
+                () -> CartOwnerResolver.resolve(UUID.randomUUID().toString()));
+        assertThat(owner).isEqualTo(new CartOwner.User("user-1"));
         assertThat(new CartOwner.User("user-1").redisKey()).isEqualTo("cart:user:user-1");
     }
 

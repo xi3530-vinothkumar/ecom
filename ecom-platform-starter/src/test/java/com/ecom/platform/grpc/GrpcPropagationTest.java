@@ -13,7 +13,6 @@ import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.grpc.stub.StreamObserver;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Set;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -56,6 +55,7 @@ class GrpcPropagationTest {
             out.onNext(ProductItem.newBuilder()
                     .setSku(req.getSku())
                     .setName(ctx.userId() + "|" + String.join(",", ctx.roles()) + "|" + ctx.correlationId())
+                    .setVariantName(Thread.currentThread().isVirtual() ? "virtual" : "platform")
                     .build());
             out.onCompleted();
         }
@@ -74,20 +74,16 @@ class GrpcPropagationTest {
     @Autowired CircuitBreakerRegistry breakers;
     @Autowired MeterRegistry meters;
 
-    @AfterEach
-    void clear() {
-        CallContext.clear();
-    }
-
     @Test
     void propagatesCorrelationIdAndIdentity() {
         String corr = "0b6f1f9e-2c55-4a4b-9a55-1d0e5b1a7c11";
-        CallContext.set(new CallContext(corr, "user-42", Set.of("ADMIN")));
         var stub = CatalogServiceGrpc.newBlockingStub(channels.channel("catalog"));
 
-        var item = calls.call("catalog", () -> stub.getProduct(GetProductRequest.newBuilder().setSku("S1").build()));
+        var item = CallContext.call(new CallContext(corr, "user-42", Set.of("ADMIN")),
+                () -> calls.call("catalog", () -> stub.getProduct(GetProductRequest.newBuilder().setSku("S1").build())));
 
         assertThat(item.getName()).isEqualTo("user-42|ADMIN|" + corr);
+        assertThat(item.getVariantName()).as("served on a virtual thread").isEqualTo("virtual");
     }
 
     @Test

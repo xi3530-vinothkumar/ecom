@@ -2,6 +2,10 @@
 server:
   shutdown: graceful
 spring:
+  threads:
+    virtual:
+      # Tomcat, @Scheduled, Kafka listener containers and the gRPC server (see GrpcAutoConfiguration)
+      enabled: true
   lifecycle:
     timeout-per-shutdown-phase: 20s
   jackson:

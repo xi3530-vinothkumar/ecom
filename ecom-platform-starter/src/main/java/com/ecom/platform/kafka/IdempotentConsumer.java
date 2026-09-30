@@ -39,8 +39,8 @@ public class IdempotentConsumer {
 
     public void handle(ConsumerRecord<String, String> record, String consumer, Consumer<EventEnvelope> handler) {
         EventEnvelope envelope = EventEnvelope.parse(mapper, record.value());
-        CallContext.set(new CallContext(CorrelationIds.acceptOrGenerate(envelope.correlationId()), null, null));
-        try {
+        var ctx = new CallContext(CorrelationIds.acceptOrGenerate(envelope.correlationId()), null, null);
+        CallContext.run(ctx, () -> {
             Runnable work = () -> {
                 if (store.markProcessed(envelope.eventId(), consumer)) {
                     handler.accept(envelope);
@@ -59,9 +59,7 @@ public class IdempotentConsumer {
                     throw e;
                 }
             }
-        } finally {
-            CallContext.clear();
-        }
+        });
     }
 
     public ObjectMapper mapper() {

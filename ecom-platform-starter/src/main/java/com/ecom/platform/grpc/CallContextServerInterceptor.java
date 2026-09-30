@@ -13,7 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Restores {@link CallContext} from metadata around every listener callback (gRPC may run callbacks
+ * Binds {@link CallContext} from metadata around every listener callback (gRPC may run callbacks
  * on different threads) and translates {@link EcomException} into the matching gRPC status.
  */
 public class CallContextServerInterceptor implements ServerInterceptor {
@@ -29,7 +29,7 @@ public class CallContextServerInterceptor implements ServerInterceptor {
                 userId == null || userId.isBlank() ? null : userId,
                 CallContext.parseRoles(headers.get(GrpcMetadataKeys.USER_ROLES)));
 
-        ServerCall.Listener<Q> delegate = withContext(ctx, () -> next.startCall(call, headers));
+        ServerCall.Listener<Q> delegate = CallContext.call(ctx, () -> next.startCall(call, headers));
         return new ForwardingServerCallListener.SimpleForwardingServerCallListener<>(delegate) {
             @Override
             public void onMessage(Q message) {
@@ -58,27 +58,17 @@ public class CallContextServerInterceptor implements ServerInterceptor {
         };
     }
 
-    private static <T> T withContext(CallContext ctx, java.util.function.Supplier<T> body) {
-        CallContext.set(ctx);
-        try {
-            return body.get();
-        } finally {
-            CallContext.clear();
-        }
-    }
-
     private static void run(CallContext ctx, ServerCall<?, ?> call, Runnable body) {
-        CallContext.set(ctx);
-        try {
-            body.run();
-        } catch (EcomException e) {
-            closeQuietly(call, Status.fromCode(e.code().grpcCode()).withDescription(e.getMessage()));
-        } catch (RuntimeException e) {
-            log.error("Unhandled exception in gRPC call {}", call.getMethodDescriptor().getFullMethodName(), e);
-            closeQuietly(call, Status.INTERNAL.withDescription("Internal error"));
-        } finally {
-            CallContext.clear();
-        }
+        CallContext.run(ctx, () -> {
+            try {
+                body.run();
+            } catch (EcomException e) {
+                closeQuietly(call, Status.fromCode(e.code().grpcCode()).withDescription(e.getMessage()));
+            } catch (RuntimeException e) {
+                log.error("Unhandled exception in gRPC call {}", call.getMethodDescriptor().getFullMethodName(), e);
+                closeQuietly(call, Status.INTERNAL.withDescription("Internal error"));
+            }
+        });
     }
 
     private static void closeQuietly(ServerCall<?, ?> call, Status status) {

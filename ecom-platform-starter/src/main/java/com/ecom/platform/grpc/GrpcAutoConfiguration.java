@@ -2,11 +2,16 @@ package com.ecom.platform.grpc;
 
 import io.github.resilience4j.micrometer.tagged.TaggedCircuitBreakerMetrics;
 import io.micrometer.core.instrument.binder.MeterBinder;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnThreading;
 import org.springframework.boot.grpc.client.autoconfigure.GrpcClientProperties;
+import org.springframework.boot.grpc.server.autoconfigure.GrpcServerExecutorProvider;
+import org.springframework.boot.thread.Threading;
 import org.springframework.cloud.circuitbreaker.resilience4j.Resilience4JCircuitBreakerFactory;
 import org.springframework.cloud.circuitbreaker.resilience4j.Resilience4JConfigBuilder;
 import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
@@ -37,6 +42,23 @@ public class GrpcAutoConfiguration {
         @GlobalServerInterceptor
         CallContextServerInterceptor callContextServerInterceptor() {
             return new CallContextServerInterceptor();
+        }
+    }
+
+    /** One virtual thread per served call when spring.threads.virtual.enabled (gRPC's default is a cached pool). */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(GrpcServerExecutorProvider.class)
+    @ConditionalOnThreading(Threading.VIRTUAL)
+    static class ServerVirtualThreads {
+
+        @Bean(destroyMethod = "close")
+        ExecutorService grpcServerVirtualThreads() {
+            return Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("grpc-", 0).factory());
+        }
+
+        @Bean
+        GrpcServerExecutorProvider grpcServerExecutorProvider(ExecutorService grpcServerVirtualThreads) {
+            return () -> grpcServerVirtualThreads;
         }
     }
 
