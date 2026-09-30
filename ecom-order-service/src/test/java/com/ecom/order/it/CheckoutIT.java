@@ -49,13 +49,13 @@ class CheckoutIT extends AbstractOrderIT {
         assertThat(sagaStep(orderId)).isEqualTo("ORDER_CREATED");
 
         List<EventEnvelope> created = KafkaTestSupport.await(Containers.kafka().getBootstrapServers(), mapper,
-                EventTopics.ORDER_CREATED, e -> orderId.toString().equals(e.payload().path("orderId").asText()), TIMEOUT);
+                EventTopics.ORDER_CREATED, e -> orderId.toString().equals(e.payload().path("orderId").asString()), TIMEOUT);
         assertThat(created).hasSize(1);
         EventEnvelope env = created.getFirst();
         assertThat(env.producerService()).isEqualTo("order-service");
-        assertThat(env.payload().path("userId").asText()).isEqualTo(user);
+        assertThat(env.payload().path("userId").asString()).isEqualTo(user);
         assertThat(env.payload().path("lines")).hasSize(2);
-        assertThat(env.payload().path("lines").get(0).path("sku").asText()).isEqualTo("SKU-A");
+        assertThat(env.payload().path("lines").get(0).path("sku").asString()).isEqualTo("SKU-A");
         assertThat(env.payload().path("lines").get(0).path("quantity").asInt()).isEqualTo(2);
     }
 

@@ -6,7 +6,6 @@ import com.ecom.common.events.EventTopics;
 import com.ecom.common.events.payload.OrderCreatedPayload;
 import com.ecom.common.events.payload.StockLevelChangedPayload;
 import com.ecom.inventory.infrastructure.OrderEventsListener;
-import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -19,6 +18,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import tools.jackson.databind.JsonNode;
 
 @AutoConfigureTestRestTemplate
 class AdminInventoryApiIT extends AbstractInventoryIT {
@@ -54,7 +54,7 @@ class AdminInventoryApiIT extends AbstractInventoryIT {
         assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(created.getBody().path("onHand").asInt()).isEqualTo(7);
         assertThat(created.getBody().path("available").asInt()).isEqualTo(7);
-        assertThat(created.getBody().path("warehouseId").asText()).isEqualTo("DEFAULT");
+        assertThat(created.getBody().path("warehouseId").asString()).isEqualTo("DEFAULT");
 
         put(s, Map.of("onHand", 9), "ADMIN");
         put(s, Map.of("onHand", 9), "ADMIN"); // unchanged: no new event

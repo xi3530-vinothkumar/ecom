@@ -8,12 +8,12 @@ import com.ecom.e2e.support.Api;
 import com.ecom.e2e.support.EventLog;
 import com.ecom.e2e.support.Json;
 import com.ecom.e2e.support.SagaTestBase;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Scenario 6: at-least-once delivery. Captured saga events are re-published verbatim (same eventId)
@@ -58,7 +58,7 @@ class DuplicateDeliveryIT extends SagaTestBase {
             });
             assertThat(db.paymentTransactions(orderId)).hasSize(1).allSatisfy(tx ->
                     assertThat(tx.status()).isEqualTo("CAPTURED"));
-            assertThat(api.order(s.userId(), orderId).path("status").asText()).isEqualTo("CONFIRMED");
+            assertThat(api.order(s.userId(), orderId).path("status").asString()).isEqualTo("CONFIRMED");
             assertThat(api.cartQty(s.userId(), sku)).isEqualTo(2);
             assertThat(db.notificationCount(s.userId(), "ORDER_CONFIRMED")).isEqualTo(1);
             // no consumer re-emitted anything: each downstream event still exists exactly once

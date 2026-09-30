@@ -16,8 +16,6 @@ import com.ecom.payment.infrastructure.psp.FakePspClient;
 import com.ecom.payment.infrastructure.psp.StripeSignatureVerifier;
 import com.ecom.testing.Containers;
 import com.ecom.testing.KafkaTestSupport;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -35,6 +33,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /** One shared context (same config in every IT): Postgres + Kafka containers, fake PSP, fake peers. */
 @SpringBootTest(
@@ -116,7 +116,7 @@ public abstract class PaymentIntegrationTestBase {
 
     protected JsonNode awaitPublished(String topic, UUID orderId) {
         List<EventEnvelope> found = KafkaTestSupport.await(bootstrap(), mapper, topic,
-                env -> orderId.toString().equals(env.payload().path("orderId").asText()), TIMEOUT);
+                env -> orderId.toString().equals(env.payload().path("orderId").asString()), TIMEOUT);
         if (found.isEmpty()) {
             throw new AssertionError("No " + topic + " event for order " + orderId);
         }

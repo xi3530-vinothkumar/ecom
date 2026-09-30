@@ -7,6 +7,7 @@ spring:
   jackson:
     deserialization:
       fail-on-unknown-properties: false   # additive-only event/DTO evolution
+      fail-on-null-for-primitives: false  # Jackson 3 flipped this default; keep Jackson 2 behaviour
     default-property-inclusion: non_null
   jpa:
     open-in-view: false

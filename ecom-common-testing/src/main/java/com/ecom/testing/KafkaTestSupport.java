@@ -1,7 +1,6 @@
 package com.ecom.testing;
 
 import com.ecom.common.events.EventEnvelope;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -18,6 +17,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import tools.jackson.databind.ObjectMapper;
 
 /** Raw Kafka helpers for tests: publish envelopes as a foreign producer, and await envelopes. */
 public final class KafkaTestSupport {

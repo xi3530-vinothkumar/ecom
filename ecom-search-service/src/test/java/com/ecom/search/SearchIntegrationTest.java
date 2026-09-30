@@ -12,7 +12,6 @@ import com.ecom.search.infrastructure.ElasticsearchProductIndex;
 import com.ecom.search.infrastructure.EventListeners;
 import com.ecom.testing.Containers;
 import com.ecom.testing.KafkaTestSupport;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
@@ -32,6 +31,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import tools.jackson.databind.ObjectMapper;
 
 /** Shared context for all search ITs: real Elasticsearch + Kafka, events published as a foreign producer. */
 @SpringBootTest

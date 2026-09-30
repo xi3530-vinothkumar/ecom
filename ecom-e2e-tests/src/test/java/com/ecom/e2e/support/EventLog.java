@@ -26,7 +26,7 @@ public final class EventLog implements AutoCloseable {
     public record Rec(String topic, String key, String rawValue, EventEnvelope envelope) {
         public String orderId() {
             var n = envelope.payload() == null ? null : envelope.payload().get("orderId");
-            return n == null ? null : n.asText();
+            return n == null ? null : n.asString();
         }
     }
 

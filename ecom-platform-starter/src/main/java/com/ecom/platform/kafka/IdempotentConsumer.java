@@ -3,12 +3,12 @@ package com.ecom.platform.kafka;
 import com.ecom.common.events.EventEnvelope;
 import com.ecom.platform.core.CallContext;
 import com.ecom.platform.core.CorrelationIds;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.function.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Template method every {@code @KafkaListener} routes through:

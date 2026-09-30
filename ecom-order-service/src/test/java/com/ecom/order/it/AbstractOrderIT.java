@@ -7,7 +7,6 @@ import com.ecom.order.OrderServiceApplication;
 import com.ecom.order.infrastructure.OrderSagaListener;
 import com.ecom.testing.Containers;
 import com.ecom.testing.KafkaTestSupport;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
@@ -24,6 +23,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import tools.jackson.databind.ObjectMapper;
 
 /** One shared context for every IT (same config => cached). Each test uses its own fresh user id. */
 @SpringBootTest(

@@ -8,9 +8,6 @@ import com.ecom.payment.infrastructure.persistence.PaymentTransactionRepository;
 import com.ecom.payment.infrastructure.psp.StripeSignatureVerifier;
 import com.ecom.payment.infrastructure.psp.StripeSignatureVerifier.InvalidSignatureException;
 import com.ecom.platform.core.EcomException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
@@ -21,6 +18,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Stripe-shaped PSP webhooks. The signature is verified over the raw bytes before anything is
@@ -68,8 +68,8 @@ public class PspWebhookService {
             throw EcomException.validation("Invalid webhook signature");
         }
         JsonNode event = parse(rawBody);
-        String eventId = event.path("id").asText("");
-        String type = event.path("type").asText("");
+        String eventId = event.path("id").asString("");
+        String type = event.path("type").asString("");
         if (eventId.isBlank() || type.isBlank()) {
             throw EcomException.validation("Webhook event lacks id or type");
         }
@@ -78,7 +78,7 @@ public class PspWebhookService {
             return Outcome.IGNORED;
         }
         JsonNode intent = event.path("data").path("object");
-        String pspReference = intent.path("id").asText("");
+        String pspReference = intent.path("id").asString("");
         if (pspReference.isBlank()) {
             throw EcomException.validation("Webhook event " + eventId + " lacks data.object.id");
         }
@@ -88,7 +88,7 @@ public class PspWebhookService {
     private Outcome process(String eventId, String type, String pspReference, JsonNode intent) {
         Optional<UUID> orderId = transactions.findOrderIdByPspReference(pspReference);
         if (orderId.isEmpty()) {
-            String metadataOrderId = intent.path("metadata").path("order_id").asText("");
+            String metadataOrderId = intent.path("metadata").path("order_id").asString("");
             if (!metadataOrderId.isBlank()) {
                 // Stripe can deliver before the saga consumer commits the synchronous authorization
                 throw EcomException.unavailable("Payment intent " + pspReference + " not recorded yet", null);
@@ -121,7 +121,7 @@ public class PspWebhookService {
         } else {
             JsonNode error = intent.path("last_payment_error");
             String reason = firstNonBlank(
-                    error.path("decline_code").asText(""), error.path("code").asText(""), "payment_failed");
+                    error.path("decline_code").asString(""), error.path("code").asString(""), "payment_failed");
             payment.markFailed(reason, now);
             events.failed(payment);
         }
@@ -136,7 +136,7 @@ public class PspWebhookService {
                 throw EcomException.validation("Webhook body is not a JSON object");
             }
             return node;
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             throw EcomException.validation("Webhook body is not valid JSON");
         }
     }

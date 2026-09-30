@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ecom.common.events.EventTopics;
 import com.ecom.user.application.AdminBootstrap;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
@@ -21,6 +19,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 class AuthFlowIT extends AbstractIT {
 
@@ -39,7 +39,7 @@ class AuthFlowIT extends AbstractIT {
         assertThat(rows.getFirst().get("topic")).isEqualTo(EventTopics.USER_REGISTERED);
         String payload = (String) rows.getFirst().get("payload");
         JsonNode envelope = mapper.readTree(payload);
-        assertThat(envelope.path("payload").path("userId").asText()).isEqualTo(userId.toString());
+        assertThat(envelope.path("payload").path("userId").asString()).isEqualTo(userId.toString());
         assertThat(payload).doesNotContain(email).doesNotContain("Test User");
 
         String hash = jdbc.queryForObject("SELECT password_hash FROM users WHERE id = ?", String.class, userId);

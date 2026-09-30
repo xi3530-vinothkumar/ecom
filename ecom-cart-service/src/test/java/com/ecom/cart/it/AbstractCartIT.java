@@ -1,13 +1,13 @@
 package com.ecom.cart.it;
 
 import com.ecom.testing.Containers;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import tools.jackson.databind.ObjectMapper;
 
 /** One shared context (Redis + Kafka + fake Catalog) for all cart ITs; tests isolate via unique ids/SKUs. */
 @SpringBootTest(

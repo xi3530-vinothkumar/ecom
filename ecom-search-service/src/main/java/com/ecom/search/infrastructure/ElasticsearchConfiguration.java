@@ -1,12 +1,11 @@
 package com.ecom.search.infrastructure;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.json.jackson.JacksonJsonpMapper;
+import co.elastic.clients.json.jackson.Jackson3JsonpMapper;
 import co.elastic.clients.transport.ElasticsearchTransport;
 import co.elastic.clients.transport.rest5_client.Rest5ClientTransport;
 import co.elastic.clients.transport.rest5_client.low_level.Rest5Client;
 import co.elastic.clients.transport.rest5_client.low_level.Rest5ClientBuilder;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.util.concurrent.TimeUnit;
@@ -19,6 +18,7 @@ import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Plain HTTP locally / in Compose; in AWS envs HTTPS to Elastic Cloud over PrivateLink, authenticated
@@ -41,8 +41,8 @@ public class ElasticsearchConfiguration {
     }
 
     @Bean
-    ElasticsearchTransport elasticsearchTransport(Rest5Client restClient, ObjectMapper mapper) {
-        return new Rest5ClientTransport(restClient, new JacksonJsonpMapper(mapper.copy()));
+    ElasticsearchTransport elasticsearchTransport(Rest5Client restClient, JsonMapper mapper) {
+        return new Rest5ClientTransport(restClient, new Jackson3JsonpMapper(mapper));
     }
 
     @Bean

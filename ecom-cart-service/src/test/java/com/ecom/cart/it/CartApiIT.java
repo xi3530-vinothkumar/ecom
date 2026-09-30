@@ -2,7 +2,6 @@ package com.ecom.cart.it;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -16,6 +15,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import tools.jackson.databind.JsonNode;
 
 @AutoConfigureTestRestTemplate
 class CartApiIT extends AbstractCartIT {
@@ -48,7 +48,7 @@ class CartApiIT extends AbstractCartIT {
     private String newGuestId() {
         ResponseEntity<JsonNode> res = rest.postForEntity("/cart/guest", null, JsonNode.class);
         assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        return res.getBody().path("guestCartId").asText();
+        return res.getBody().path("guestCartId").asString();
     }
 
     @Test
@@ -66,14 +66,14 @@ class CartApiIT extends AbstractCartIT {
 
         assertThat(cart.path("lines")).hasSize(2);
         JsonNode mug = cart.path("lines").get(0);
-        assertThat(mug.path("sku").asText()).isEqualTo(a);
-        assertThat(mug.path("name").asText()).isEqualTo("Mug");
+        assertThat(mug.path("sku").asString()).isEqualTo(a);
+        assertThat(mug.path("name").asString()).isEqualTo("Mug");
         assertThat(mug.path("quantity").asInt()).isEqualTo(3);
-        assertThat(mug.path("unitPrice").path("amount").asText()).isEqualTo("12.50");
-        assertThat(mug.path("lineTotal").path("amount").asText()).isEqualTo("37.50");
+        assertThat(mug.path("unitPrice").path("amount").asString()).isEqualTo("12.50");
+        assertThat(mug.path("lineTotal").path("amount").asString()).isEqualTo("37.50");
         assertThat(mug.path("available").asBoolean()).isTrue();
-        assertThat(cart.path("subtotal").path("amount").asText()).isEqualTo("40.50");
-        assertThat(cart.path("subtotal").path("currency").asText()).isEqualTo("EUR");
+        assertThat(cart.path("subtotal").path("amount").asString()).isEqualTo("40.50");
+        assertThat(cart.path("subtotal").path("currency").asString()).isEqualTo("EUR");
         assertThat(cart.path("itemCount").asInt()).isEqualTo(4);
 
         String key = "cart:guest:" + guestId;
@@ -87,14 +87,14 @@ class CartApiIT extends AbstractCartIT {
 
         JsonNode after = get(h).getBody();
         assertThat(after.path("lines")).hasSize(1);
-        assertThat(after.path("subtotal").path("amount").asText()).isEqualTo("37.50");
+        assertThat(after.path("subtotal").path("amount").asString()).isEqualTo("37.50");
 
         assertThat(rest.exchange("/cart", HttpMethod.DELETE, new HttpEntity<>(h), Void.class).getStatusCode())
                 .isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(redis.hasKey(key)).isFalse();
         JsonNode empty = get(h).getBody();
         assertThat(empty.path("lines")).isEmpty();
-        assertThat(empty.path("subtotal").path("amount").asText()).isEqualTo("0.00");
+        assertThat(empty.path("subtotal").path("amount").asString()).isEqualTo("0.00");
     }
 
     @Test
@@ -122,9 +122,9 @@ class CartApiIT extends AbstractCartIT {
 
         assertThat(cart.path("catalogReachable").asBoolean()).isTrue();
         Map<String, Boolean> availability = new java.util.HashMap<>();
-        cart.path("lines").forEach(l -> availability.put(l.path("sku").asText(), l.path("available").asBoolean()));
+        cart.path("lines").forEach(l -> availability.put(l.path("sku").asString(), l.path("available").asBoolean()));
         assertThat(availability).containsExactlyInAnyOrderEntriesOf(Map.of(ok, true, inactive, false, gone, false));
-        assertThat(cart.path("subtotal").path("amount").asText()).isEqualTo("10.00");
+        assertThat(cart.path("subtotal").path("amount").asString()).isEqualTo("10.00");
     }
 
     @Test

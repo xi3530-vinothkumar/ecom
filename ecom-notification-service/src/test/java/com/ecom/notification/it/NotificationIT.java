@@ -18,7 +18,6 @@ import com.ecom.testing.KafkaTestSupport;
 import com.ecom.user.proto.v1.GetUserRequest;
 import com.ecom.user.proto.v1.User;
 import com.ecom.user.proto.v1.UserServiceGrpc;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.grpc.Server;
 import io.grpc.Status;
 import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
@@ -41,6 +40,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest(
         classes = {NotificationServiceApplication.class, NotificationIT.RecordingSenderConfig.class},

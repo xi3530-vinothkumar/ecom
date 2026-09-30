@@ -1,6 +1,5 @@
 package com.ecom.platform.kafka;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.tracing.Tracer;
 import javax.sql.DataSource;
@@ -22,6 +21,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.ObjectMapper;
 
 /** Outbox writer/relay + JDBC dedup store, for services with a relational DB and Kafka. */
 @AutoConfiguration(after = {
