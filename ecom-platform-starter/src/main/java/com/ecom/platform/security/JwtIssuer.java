@@ -1,76 +1,77 @@
 package com.ecom.platform.security;
 
-import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
-import com.nimbusds.jose.JWSHeader;
-import com.nimbusds.jose.JOSEObjectType;
-import com.nimbusds.jose.crypto.RSASSASigner;
+import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.KeyUse;
 import com.nimbusds.jose.jwk.RSAKey;
-import com.nimbusds.jwt.JWTClaimsSet;
-import com.nimbusds.jwt.SignedJWT;
+import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import java.security.interfaces.RSAPrivateCrtKey;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 
-/** RS256 access-token issuer + JWKS source. Claims: sub, roles, iss, aud, iat, exp, jti. */
+/**
+ * RS256 access-token issuer (Spring Security {@link JwtEncoder}) + JWKS source.
+ * Claims: sub, roles, iss, aud, iat, exp, jti.
+ */
 public class JwtIssuer {
 
     public record IssuedToken(String token, String jti, Instant expiresAt) {}
 
     private final JwtProperties props;
-    private final RSASSASigner signer;
-    private final JWKSet jwks;
+    private final JwtEncoder encoder;
+    private final JWKSet publicJwks;
     private final Clock clock;
 
     public JwtIssuer(JwtProperties props, Clock clock) {
         this.props = props;
         this.clock = clock;
         RSAPrivateCrtKey privateKey = PemKeys.privateKey(props.getPrivateKeyPem());
-        this.signer = new RSASSASigner(privateKey);
-        List<com.nimbusds.jose.jwk.JWK> keys = new ArrayList<>();
-        keys.add(new RSAKey.Builder(PemKeys.publicKeyOf(privateKey))
-                .keyID(props.getKeyId()).keyUse(KeyUse.SIGNATURE).algorithm(JWSAlgorithm.RS256).build());
+        RSAKey signingKey = rsaKey(props.getKeyId(), new RSAKey.Builder(PemKeys.publicKeyOf(privateKey)).privateKey(privateKey));
+        this.encoder = new NimbusJwtEncoder(new ImmutableJWKSet<>(new JWKSet(signingKey)));
+        List<JWK> keys = new ArrayList<>();
+        keys.add(signingKey.toPublicJWK());
         for (JwtProperties.PublicKey prev : props.getPreviousPublicKeys()) {
-            keys.add(new RSAKey.Builder(PemKeys.publicKey(prev.pem()))
-                    .keyID(prev.keyId()).keyUse(KeyUse.SIGNATURE).algorithm(JWSAlgorithm.RS256).build());
+            keys.add(rsaKey(prev.keyId(), new RSAKey.Builder(PemKeys.publicKey(prev.pem()))));
         }
-        this.jwks = new JWKSet(keys);
+        this.publicJwks = new JWKSet(keys);
     }
 
     public IssuedToken issue(String userId, Collection<String> roles) {
         Instant now = clock.instant();
         Instant exp = now.plus(props.getAccessTokenTtl());
         String jti = UUID.randomUUID().toString();
-        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+        JwtClaimsSet claims = JwtClaimsSet.builder()
                 .subject(userId)
                 .issuer(props.getIssuer())
-                .audience(props.getAudience())
-                .issueTime(Date.from(now))
-                .expirationTime(Date.from(exp))
-                .jwtID(jti)
+                .audience(List.of(props.getAudience()))
+                .issuedAt(now)
+                .expiresAt(exp)
+                .id(jti)
                 .claim("roles", List.copyOf(roles))
                 .build();
-        SignedJWT jwt = new SignedJWT(
-                new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(props.getKeyId()).type(JOSEObjectType.JWT).build(),
-                claims);
-        try {
-            jwt.sign(signer);
-        } catch (JOSEException e) {
-            throw new IllegalStateException("JWT signing failed", e);
-        }
-        return new IssuedToken(jwt.serialize(), jti, exp);
+        JwsHeader header = JwsHeader.with(SignatureAlgorithm.RS256).keyId(props.getKeyId()).type("JWT").build();
+        String token = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+        return new IssuedToken(token, jti, exp);
     }
 
     /** Public JWKS document for {@code /.well-known/jwks.json}. */
     public Map<String, Object> jwks() {
-        return jwks.toJSONObject(true);
+        return publicJwks.toJSONObject(true);
+    }
+
+    private static RSAKey rsaKey(String keyId, RSAKey.Builder builder) {
+        return builder.keyID(keyId).keyUse(KeyUse.SIGNATURE).algorithm(JWSAlgorithm.RS256).build();
     }
 }
