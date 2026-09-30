@@ -1,5 +1,7 @@
 package com.ecom.notification.it;
 
+import com.ecom.testing.ContainerConfigs;
+import org.springframework.context.annotation.Import;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
@@ -42,6 +44,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.databind.ObjectMapper;
 
+@Import({ContainerConfigs.Postgres.class, ContainerConfigs.Kafka.class})
 @SpringBootTest(
         classes = {NotificationServiceApplication.class, NotificationIT.RecordingSenderConfig.class},
         webEnvironment = SpringBootTest.WebEnvironment.NONE,
@@ -71,8 +74,6 @@ class NotificationIT {
 
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry r) {
-        Containers.registerPostgres(r);
-        Containers.registerKafka(r);
         r.add("spring.grpc.client.channel.user.target", () -> "localhost:" + FAKE_USER_SERVICE.getPort());
     }
 

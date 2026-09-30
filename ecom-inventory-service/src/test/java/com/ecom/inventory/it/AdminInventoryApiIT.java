@@ -1,5 +1,6 @@
 package com.ecom.inventory.it;
 
+import static com.ecom.testing.RestCalls.exchange;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ecom.common.events.EventTopics;
@@ -10,20 +11,19 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.resttestclient.TestRestTemplate;
-import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
-import org.springframework.http.HttpEntity;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.web.servlet.client.RestTestClient;
 import tools.jackson.databind.JsonNode;
 
-@AutoConfigureTestRestTemplate
+@AutoConfigureRestTestClient
 class AdminInventoryApiIT extends AbstractInventoryIT {
 
-    @Autowired TestRestTemplate rest;
+    @Autowired RestTestClient rest;
     @Autowired OrderEventsListener listener;
 
     private static HttpHeaders headers(String roles) {
@@ -37,13 +37,11 @@ class AdminInventoryApiIT extends AbstractInventoryIT {
     }
 
     private ResponseEntity<JsonNode> put(String sku, Object body, String roles) {
-        return rest.exchange("/admin/inventory/" + sku, HttpMethod.PUT, new HttpEntity<>(body, headers(roles)),
-                JsonNode.class);
+        return exchange(rest, HttpMethod.PUT, "/admin/inventory/" + sku, body, headers(roles), JsonNode.class);
     }
 
     private ResponseEntity<JsonNode> get(String sku, String roles) {
-        return rest.exchange("/admin/inventory/" + sku, HttpMethod.GET, new HttpEntity<>(headers(roles)),
-                JsonNode.class);
+        return exchange(rest, HttpMethod.GET, "/admin/inventory/" + sku, null, headers(roles), JsonNode.class);
     }
 
     @Test
@@ -90,7 +88,7 @@ class AdminInventoryApiIT extends AbstractInventoryIT {
         assertThat(put(s, Map.of("onHand", 1), "CUSTOMER").getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(get(s, null).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         HttpHeaders anonymous = new HttpHeaders();
-        assertThat(rest.exchange("/admin/inventory/" + s, HttpMethod.GET, new HttpEntity<>(anonymous), JsonNode.class)
+        assertThat(exchange(rest, HttpMethod.GET, "/admin/inventory/" + s, null, anonymous, JsonNode.class)
                         .getStatusCode())
                 .isEqualTo(HttpStatus.UNAUTHORIZED);
     }

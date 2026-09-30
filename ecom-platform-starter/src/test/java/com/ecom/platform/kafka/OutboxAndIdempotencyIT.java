@@ -1,5 +1,7 @@
 package com.ecom.platform.kafka;
 
+import com.ecom.testing.ContainerConfigs;
+import org.springframework.context.annotation.Import;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -18,19 +20,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
+@Import({ContainerConfigs.Postgres.class, ContainerConfigs.Kafka.class})
 @SpringBootTest(classes = TestApp.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class OutboxAndIdempotencyIT {
-
-    @DynamicPropertySource
-    static void props(DynamicPropertyRegistry r) {
-        Containers.registerPostgres(r);
-        Containers.registerKafka(r);
-    }
 
     @Autowired OutboxWriter outbox;
     @Autowired IdempotentConsumer consumer;

@@ -1,5 +1,6 @@
 package com.ecom.user.it;
 
+import static com.ecom.testing.RestCalls.exchange;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ecom.common.events.EventTopics;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -169,7 +171,8 @@ class AuthFlowIT extends AbstractIT {
         UUID userId = register(email, "correct-horse-1");
         String accessToken = (String) login(email, "correct-horse-1").getBody().get("accessToken");
 
-        ResponseEntity<String> jwks = http.getForEntity("/.well-known/jwks.json", String.class);
+        ResponseEntity<String> jwks =
+                exchange(http, HttpMethod.GET, "/.well-known/jwks.json", null, new HttpHeaders(), String.class);
         assertThat(jwks.getStatusCode()).isEqualTo(HttpStatus.OK);
         JWKSet set = JWKSet.parse(jwks.getBody());
         assertThat(jwks.getBody()).doesNotContain("\"d\"");

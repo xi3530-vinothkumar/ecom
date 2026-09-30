@@ -1,5 +1,7 @@
 package com.ecom.search;
 
+import com.ecom.testing.ContainerConfigs;
+import org.springframework.context.annotation.Import;
 import static org.awaitility.Awaitility.await;
 
 import com.ecom.common.events.EventEnvelope;
@@ -28,21 +30,14 @@ import org.junit.jupiter.api.BeforeAll;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
 
 /** Shared context for all search ITs: real Elasticsearch + Kafka, events published as a foreign producer. */
+@Import({ContainerConfigs.Elasticsearch.class, ContainerConfigs.Kafka.class})
 @SpringBootTest
 @AutoConfigureMockMvc
 public abstract class SearchIntegrationTest {
-
-    @DynamicPropertySource
-    static void containers(DynamicPropertyRegistry r) {
-        Containers.registerElasticsearch(r);
-        Containers.registerKafka(r);
-    }
 
     private static Admin admin;
 

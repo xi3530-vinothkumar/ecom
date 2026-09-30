@@ -1,5 +1,6 @@
 package com.ecom.cart.it;
 
+import static com.ecom.testing.RestCalls.exchange;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
@@ -7,20 +8,19 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.resttestclient.TestRestTemplate;
-import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
-import org.springframework.http.HttpEntity;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.web.servlet.client.RestTestClient;
 import tools.jackson.databind.JsonNode;
 
-@AutoConfigureTestRestTemplate
+@AutoConfigureRestTestClient
 class CartApiIT extends AbstractCartIT {
 
-    @Autowired TestRestTemplate rest;
+    @Autowired RestTestClient rest;
 
     private static HttpHeaders guest(String guestId) {
         HttpHeaders h = new HttpHeaders();
@@ -38,15 +38,16 @@ class CartApiIT extends AbstractCartIT {
     }
 
     private ResponseEntity<JsonNode> put(HttpHeaders h, String sku, Object body) {
-        return rest.exchange("/cart/items/" + sku, HttpMethod.PUT, new HttpEntity<>(body, h), JsonNode.class);
+        return exchange(rest, HttpMethod.PUT, "/cart/items/" + sku, body, h, JsonNode.class);
     }
 
     private ResponseEntity<JsonNode> get(HttpHeaders h) {
-        return rest.exchange("/cart", HttpMethod.GET, new HttpEntity<>(h), JsonNode.class);
+        return exchange(rest, HttpMethod.GET, "/cart", null, h, JsonNode.class);
     }
 
     private String newGuestId() {
-        ResponseEntity<JsonNode> res = rest.postForEntity("/cart/guest", null, JsonNode.class);
+        ResponseEntity<JsonNode> res =
+                exchange(rest, HttpMethod.POST, "/cart/guest", null, new HttpHeaders(), JsonNode.class);
         assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         return res.getBody().path("guestCartId").asString();
     }
@@ -81,7 +82,7 @@ class CartApiIT extends AbstractCartIT {
         assertThat(ttl).isBetween(Duration.ofDays(30).toSeconds() - 60, Duration.ofDays(30).toSeconds());
 
         redis.expire(key, Duration.ofDays(1));
-        assertThat(rest.exchange("/cart/items/" + b, HttpMethod.DELETE, new HttpEntity<>(h), Void.class)
+        assertThat(exchange(rest, HttpMethod.DELETE, "/cart/items/" + b, null, h, Void.class)
                 .getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(redis.getExpire(key, TimeUnit.SECONDS)).isGreaterThan(Duration.ofDays(29).toSeconds());
 
@@ -89,7 +90,7 @@ class CartApiIT extends AbstractCartIT {
         assertThat(after.path("lines")).hasSize(1);
         assertThat(after.path("subtotal").path("amount").asString()).isEqualTo("37.50");
 
-        assertThat(rest.exchange("/cart", HttpMethod.DELETE, new HttpEntity<>(h), Void.class).getStatusCode())
+        assertThat(exchange(rest, HttpMethod.DELETE, "/cart", null, h, Void.class).getStatusCode())
                 .isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(redis.hasKey(key)).isFalse();
         JsonNode empty = get(h).getBody();

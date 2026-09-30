@@ -1,12 +1,12 @@
 package com.ecom.user.it;
 
+import static com.ecom.testing.RestCalls.exchange;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -15,7 +15,7 @@ import org.springframework.http.ResponseEntity;
 class ProfileAndAddressIT extends AbstractIT {
 
     private ResponseEntity<Map<String, Object>> call(HttpMethod method, String path, Object body, HttpHeaders h) {
-        return http.exchange(path, method, new HttpEntity<>(body, h), JSON);
+        return exchange(http, method, path, body, h, JSON);
     }
 
     static Map<String, Object> address(String city) {
@@ -24,7 +24,8 @@ class ProfileAndAddressIT extends AbstractIT {
 
     @Test
     void meRequiresGatewayIdentity() {
-        assertThat(http.getForEntity("/users/me", String.class).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(exchange(http, HttpMethod.GET, "/users/me", null, new HttpHeaders(), String.class).getStatusCode())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     @Test
@@ -65,7 +66,7 @@ class ProfileAndAddressIT extends AbstractIT {
         var updated = call(HttpMethod.PUT, "/users/me/addresses/" + addressId, address("Utrecht"), asAlice);
         assertThat(updated.getBody()).containsEntry("city", "Utrecht");
 
-        ResponseEntity<List> list = http.exchange("/users/me/addresses", HttpMethod.GET, new HttpEntity<>(asAlice), List.class);
+        ResponseEntity<List> list = exchange(http, HttpMethod.GET, "/users/me/addresses", null, asAlice, List.class);
         assertThat(list.getBody()).hasSize(1);
 
         // Bob cannot see, change or delete Alice's address
@@ -75,7 +76,7 @@ class ProfileAndAddressIT extends AbstractIT {
                 .isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(call(HttpMethod.DELETE, "/users/me/addresses/" + addressId, null, asBob).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(http.exchange("/users/me/addresses", HttpMethod.GET, new HttpEntity<>(asBob), List.class).getBody())
+        assertThat(exchange(http, HttpMethod.GET, "/users/me/addresses", null, asBob, List.class).getBody())
                 .isEmpty();
 
         assertThat(call(HttpMethod.DELETE, "/users/me/addresses/" + addressId, null, asAlice).getStatusCode())

@@ -1,8 +1,9 @@
 package com.ecom.gateway;
 
+import com.ecom.testing.ContainerConfigs;
+import org.springframework.context.annotation.Import;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.ecom.testing.Containers;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -10,6 +11,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -18,7 +20,9 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
+@Import({ContainerConfigs.Redis.class})
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureWebTestClient
 @ActiveProfiles("test")
 class GatewayIT {
 
@@ -31,7 +35,6 @@ class GatewayIT {
 
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry r) {
-        Containers.registerRedis(r);
         for (String svc : List.of("user", "catalog", "inventory", "cart", "order", "payment", "search")) {
             r.add("ecom.gateway.backends." + svc, STUB::baseUrl);
         }

@@ -1,23 +1,22 @@
 package com.ecom.testing;
 
-import org.springframework.test.context.DynamicPropertyRegistry;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.containers.wait.strategy.WaitAllStrategy;
+import org.testcontainers.elasticsearch.ElasticsearchContainer;
 import org.testcontainers.kafka.KafkaContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
  * JVM-wide singleton containers (started lazily, stopped by Ryuk at JVM exit), so every test class in
- * a module shares one Postgres / Kafka / Redis / Elasticsearch. Usage:
+ * a module shares one Postgres / Kafka / Redis / Elasticsearch. Spring tests connect to them through
+ * {@link ContainerConfigs} ({@code @ServiceConnection}):
  *
  * <pre>
- * &#64;DynamicPropertySource
- * static void props(DynamicPropertyRegistry r) {
- *     Containers.registerPostgres(r);
- *     Containers.registerKafka(r);
- * }
+ * &#64;SpringBootTest
+ * &#64;Import({ContainerConfigs.Postgres.class, ContainerConfigs.Kafka.class})
+ * class MyIT { ... }
  * </pre>
  */
 public final class Containers {
@@ -27,14 +26,14 @@ public final class Containers {
     public static final String REDIS_IMAGE = "redis:7-alpine";
     public static final String ELASTICSEARCH_IMAGE = "docker.elastic.co/elasticsearch/elasticsearch:9.5.4";
 
-    private static PostgreSQLContainer<?> postgres;
+    private static PostgreSQLContainer postgres;
     private static KafkaContainer kafka;
     private static GenericContainer<?> redis;
-    private static GenericContainer<?> elasticsearch;
+    private static ElasticsearchContainer elasticsearch;
 
-    public static synchronized PostgreSQLContainer<?> postgres() {
+    public static synchronized PostgreSQLContainer postgres() {
         if (postgres == null) {
-            postgres = new PostgreSQLContainer<>(DockerImageName.parse(POSTGRES_IMAGE))
+            postgres = new PostgreSQLContainer(DockerImageName.parse(POSTGRES_IMAGE))
                     .withDatabaseName("test")
                     .withUsername("test")
                     .withPassword("test")
@@ -67,42 +66,15 @@ public final class Containers {
         return redis;
     }
 
-    public static synchronized GenericContainer<?> elasticsearch() {
+    public static synchronized ElasticsearchContainer elasticsearch() {
         if (elasticsearch == null) {
-            elasticsearch = new GenericContainer<>(DockerImageName.parse(ELASTICSEARCH_IMAGE))
-                    .withExposedPorts(9200)
-                    .withEnv("discovery.type", "single-node")
+            elasticsearch = new ElasticsearchContainer(DockerImageName.parse(ELASTICSEARCH_IMAGE))
                     .withEnv("xpack.security.enabled", "false")
                     .withEnv("ES_JAVA_OPTS", "-Xms512m -Xmx512m")
                     .waitingFor(Wait.forHttp("/_cluster/health").forPort(9200).forStatusCode(200));
             elasticsearch.start();
         }
         return elasticsearch;
-    }
-
-    public static void registerPostgres(DynamicPropertyRegistry r) {
-        var pg = postgres();
-        r.add("spring.datasource.url", pg::getJdbcUrl);
-        r.add("spring.datasource.username", pg::getUsername);
-        r.add("spring.datasource.password", pg::getPassword);
-    }
-
-    /** Registers Kafka and enables local topic creation (RF=1) from kafka-topics.yaml. */
-    public static void registerKafka(DynamicPropertyRegistry r) {
-        var k = kafka();
-        r.add("spring.kafka.bootstrap-servers", k::getBootstrapServers);
-        r.add("ecom.kafka.create-topics", () -> "true");
-    }
-
-    public static void registerRedis(DynamicPropertyRegistry r) {
-        var redis = redis();
-        r.add("spring.data.redis.host", redis::getHost);
-        r.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
-    }
-
-    public static void registerElasticsearch(DynamicPropertyRegistry r) {
-        var es = elasticsearch();
-        r.add("spring.elasticsearch.uris", () -> "http://" + es.getHost() + ":" + es.getMappedPort(9200));
     }
 
     private Containers() {}

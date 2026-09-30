@@ -1,5 +1,10 @@
 package com.ecom.order.it;
 
+import static com.ecom.testing.RestCalls.exchange;
+
+import com.ecom.testing.ContainerConfigs;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.web.servlet.client.RestTestClient;
 import static org.awaitility.Awaitility.await;
 
 import com.ecom.common.events.EventEnvelope;
@@ -11,10 +16,8 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.resttestclient.TestRestTemplate;
-import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -26,6 +29,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.databind.ObjectMapper;
 
 /** One shared context for every IT (same config => cached). Each test uses its own fresh user id. */
+@Import({ContainerConfigs.Postgres.class, ContainerConfigs.Kafka.class})
 @SpringBootTest(
         classes = OrderServiceApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -35,22 +39,20 @@ import tools.jackson.databind.ObjectMapper;
             "ecom.order.pending-stale-refresh=1h",
             "management.tracing.export.enabled=false"
         })
-@AutoConfigureTestRestTemplate
+@AutoConfigureRestTestClient
 abstract class AbstractOrderIT {
 
     static final Duration TIMEOUT = Duration.ofSeconds(30);
 
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry r) {
-        Containers.registerPostgres(r);
-        Containers.registerKafka(r);
         r.add("spring.grpc.client.channel.cart.target", () -> FakePeers.address(FakePeers.cart));
         r.add("spring.grpc.client.channel.catalog.target", () -> FakePeers.address(FakePeers.catalog));
         r.add("spring.grpc.client.channel.user.target", () -> FakePeers.address(FakePeers.user));
         r.add("spring.grpc.client.channel.payment.target", () -> FakePeers.address(FakePeers.payment));
     }
 
-    @Autowired TestRestTemplate http;
+    @Autowired RestTestClient http;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper mapper;
 
@@ -75,7 +77,7 @@ abstract class AbstractOrderIT {
         }
         h.setContentType(MediaType.APPLICATION_JSON);
         Map<String, String> body = Map.of("paymentMethodRef", paymentMethodRef, "shippingAddressId", addressId);
-        return http.exchange("/orders", HttpMethod.POST, new HttpEntity<>(body, h), Map.class);
+        return exchange(http, HttpMethod.POST, "/orders", body, h, Map.class);
     }
 
     UUID placeOrder(String userId) {
@@ -87,7 +89,7 @@ abstract class AbstractOrderIT {
     }
 
     ResponseEntity<Map> get(String userId, String path) {
-        return http.exchange(path, HttpMethod.GET, new HttpEntity<>(headers(userId)), Map.class);
+        return exchange(http, HttpMethod.GET, path, null, headers(userId), Map.class);
     }
 
     static HttpHeaders headers(String userId) {
