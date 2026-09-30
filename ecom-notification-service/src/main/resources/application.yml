@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: notification-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/notificationdb}
+    username: ${DB_USERNAME:notification}
+    password: ${DB_PASSWORD:notification}
+  flyway:
+    # seeded templates contain ${var} placeholders that Flyway must not try to substitute
+    placeholder-replacement: false
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:25}
+server:
+  port: ${HTTP_PORT:8087}
+ecom:
+  grpc:
+    server:
+      enabled: false
+    clients:
+      user:
+        address: ${USER_GRPC_ADDRESS:localhost:9091}
+  kafka:
+    create-topics: ${KAFKA_CREATE_TOPICS:false}
+  notification:
+    channel: ${NOTIFICATION_CHANNEL:log}
+    mail-from: ${MAIL_FROM:no-reply@ecom.local}
+management:
+  health:
+    mail:
+      # SMTP reachability must not flip the service DOWN (and is meaningless when channel=log);
+      # send failures surface as retries/DLT and FAILED rows in notification_log instead
+      enabled: false

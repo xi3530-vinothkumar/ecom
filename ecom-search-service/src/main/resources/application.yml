@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: search-service
+  kafka:
+    consumer:
+      properties:
+        # same partition numbers of all catalog topics go to the same consumer, so one product's
+        # created/updated/deleted events are handled by one thread
+        partition.assignment.strategy: org.apache.kafka.clients.consumer.RangeAssignor
+server:
+  port: ${HTTP_PORT:8088}
+management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,elasticsearch
+ecom:
+  grpc:
+    server:
+      enabled: false
+  kafka:
+    create-topics: ${KAFKA_CREATE_TOPICS:false}
+  elasticsearch:
+    url: ${ELASTICSEARCH_URL:http://localhost:9200}
+    # blank locally / in Compose (security disabled); Elastic Cloud API key (base64 id:key) in AWS envs
+    api-key: ${ELASTICSEARCH_API_KEY:}
+  search:
+    index: products
+    orphan-ttl: 24h
+    purge-cron: "0 17 3 * * *"

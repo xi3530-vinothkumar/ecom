@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.ecom</groupId>
+        <artifactId>ecom-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+    <artifactId>ecom-e2e-tests</artifactId>
+    <packaging>jar</packaging>
+    <description>
+        End-to-end order saga tests: real service fat jars as child processes against Testcontainers
+        Postgres/Kafka/Redis. Skipped unless -Pe2e (see README.md).
+    </description>
+
+    <properties>
+        <!-- plain `mvn verify` compiles the tests but never runs them; the e2e profile flips this -->
+        <skipITs>true</skipITs>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.ecom</groupId>
+            <artifactId>ecom-common-testing</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.ecom</groupId>
+            <artifactId>ecom-common-events</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <profiles>
+        <profile>
+            <id>e2e</id>
+            <properties>
+                <skipITs>false</skipITs>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-failsafe-plugin</artifactId>
+                        <configuration>
+                            <!-- one JVM = one started system shared by every *IT class -->
+                            <forkCount>1</forkCount>
+                            <reuseForks>true</reuseForks>
+                            <systemPropertyVariables>
+                                <e2e.repoRoot>${project.basedir}/..</e2e.repoRoot>
+                                <e2e.logDir>${project.build.directory}/e2e-logs</e2e.logDir>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>

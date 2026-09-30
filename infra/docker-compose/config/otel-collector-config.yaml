@@ -1,0 +1,162 @@
+# OpenTelemetry Collector (Compose). PLAN §9: services export OTLP once; the collector fans out.
+#   traces  : OTLP (services)                          -> Tempo
+#   metrics : prometheus scrape of /actuator/prometheus -> Prometheus (remote write)
+#   logs    : filelog of docker container JSON logs     -> Loki (native OTLP endpoint)
+# Datadog is the config-only alternate: uncomment the datadog exporter + swap the exporters in the pipelines.
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  file_storage:
+    directory: /var/lib/otelcol/file_storage
+    create_directory: true
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: ecom-services
+          scrape_interval: 15s
+          metrics_path: /actuator/prometheus
+          static_configs:
+            - targets:
+                - gateway:8080
+                - user-service:8080
+                - catalog-service:8080
+                - inventory-service:8080
+                - cart-service:8080
+                - order-service:8080
+                - payment-service:8080
+                - notification-service:8080
+                - search-service:8080
+        - job_name: kafka-exporter
+          scrape_interval: 30s
+          static_configs:
+            - targets: [kafka-exporter:9308]
+        - job_name: otel-collector
+          scrape_interval: 30s
+          static_configs:
+            - targets: [127.0.0.1:8888]
+
+  filelog/docker:
+    include: [/var/lib/docker/containers/*/*-json.log]
+    start_at: end
+    storage: file_storage
+    operators:
+      # docker json-file line: {"log":"...","stream":"stdout","time":"..."}
+      - type: json_parser
+        id: docker
+        on_error: send_quiet
+        timestamp:
+          parse_from: attributes.time
+          layout_type: gotime
+          layout: "2006-01-02T15:04:05.999999999Z07:00"
+      - type: move
+        id: docker-log-to-body
+        from: attributes.log
+        to: body
+        on_error: send_quiet
+      # our services log JSON (logstash encoder): message, level, service, traceId, spanId, correlationId
+      - type: json_parser
+        id: app-json
+        if: 'body matches "^\\s*\\{"'
+        parse_from: body
+        parse_to: attributes
+        on_error: send_quiet
+      - type: move
+        id: app-message
+        if: 'attributes.message != nil'
+        from: attributes.message
+        to: body
+      - type: severity_parser
+        if: 'attributes.level != nil'
+        parse_from: attributes.level
+        on_error: send_quiet
+      - type: move
+        id: app-service
+        if: 'attributes.service != nil'
+        from: attributes.service
+        to: resource["service.name"]
+      - type: trace_parser
+        if: 'attributes.traceId != nil and attributes.spanId != nil'
+        trace_id:
+          parse_from: attributes.traceId
+        span_id:
+          parse_from: attributes.spanId
+        on_error: send_quiet
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+  batch:
+    timeout: 5s
+  resource/env:
+    attributes:
+      - key: deployment.environment
+        value: local
+        action: upsert
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+  prometheusremotewrite:
+    endpoint: http://prometheus:9090/api/v1/write
+    resource_to_telemetry_conversion:
+      enabled: false
+    tls:
+      insecure: true
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+    tls:
+      insecure: true
+  debug:
+    verbosity: basic
+
+  # --- Alternate backend: Datadog (config-only toggle, no app change) -------------------
+  # 1. export DD_API_KEY (and DD_SITE) into the collector container
+  # 2. uncomment this exporter and the datadog connector
+  # 3. replace otlp/tempo, prometheusremotewrite, otlphttp/loki with `datadog` in the pipelines
+  #    (and add `datadog/connector` as a traces exporter + metrics receiver for APM stats)
+  # datadog:
+  #   api:
+  #     key: ${env:DD_API_KEY}
+  #     site: ${env:DD_SITE:-datadoghq.eu}
+  #   host_metadata:
+  #     enabled: false
+  #   traces:
+  #     span_name_as_resource_name: true
+  #   logs:
+  #     use_compression: true
+
+# connectors:
+#   datadog/connector:
+
+service:
+  extensions: [health_check, file_storage]
+  telemetry:
+    metrics:
+      address: 0.0.0.0:8888
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource/env, batch]
+      exporters: [otlp/tempo]
+    metrics:
+      receivers: [otlp, prometheus]
+      processors: [memory_limiter, resource/env, batch]
+      exporters: [prometheusremotewrite]
+    logs:
+      receivers: [otlp, filelog/docker]
+      processors: [memory_limiter, resource/env, batch]
+      exporters: [otlphttp/loki]

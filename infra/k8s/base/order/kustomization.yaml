@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ecom
+labels:
+  - pairs:
+      app.kubernetes.io/name: order-service
+      app.kubernetes.io/part-of: ecom
+    includeSelectors: true
+resources:
+  - serviceaccount.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - externalsecret.yaml
+configMapGenerator:
+  - name: order-service-config
+    literals:
+      - HTTP_PORT=8080
+      - GRPC_PORT=9090
+      - MANAGEMENT_SERVER_PORT=8081
+      - KAFKA_CREATE_TOPICS=false
+      - CART_GRPC_ADDRESS=cart-service:9090
+      - CATALOG_GRPC_ADDRESS=catalog-service:9090
+      - USER_GRPC_ADDRESS=user-service:9090
+      - PAYMENT_GRPC_ADDRESS=payment-service:9090

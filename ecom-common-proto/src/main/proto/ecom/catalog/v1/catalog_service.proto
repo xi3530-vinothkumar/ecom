@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package ecom.catalog.v1;
+
+import "ecom/common/v1/common.proto";
+
+option java_package = "com.ecom.catalog.proto.v1";
+option java_multiple_files = true;
+
+service CatalogService {
+  rpc GetProduct(GetProductRequest) returns (ProductItem);
+  // Batch lookup by SKU; unknown SKUs are simply absent from the response.
+  rpc GetProductsBatch(GetProductsBatchRequest) returns (GetProductsBatchResponse);
+  rpc ListCategories(ListCategoriesRequest) returns (ListCategoriesResponse);
+}
+
+message GetProductRequest { string sku = 1; }
+
+// A sellable variant (one SKU) with its product-level info flattened in.
+message ProductItem {
+  string sku = 1;
+  string product_id = 2;
+  string name = 3;
+  string variant_name = 4;
+  ecom.common.v1.Money price = 5;
+  bool active = 6;
+  string category_id = 7;
+}
+
+message GetProductsBatchRequest { repeated string skus = 1; }
+message GetProductsBatchResponse { repeated ProductItem items = 1; }
+
+message ListCategoriesRequest {}
+message Category {
+  string category_id = 1;
+  string name = 2;
+  string parent_id = 3;
+}
+message ListCategoriesResponse { repeated Category categories = 1; }

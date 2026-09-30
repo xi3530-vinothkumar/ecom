@@ -1,0 +1,156 @@
+# Overlay: prod. Placeholders to fill from `terraform output` (envs/prod): *_PLACEHOLDER endpoints,
+# AWS account id (333333333333), ACM cert / WAF ARNs, hostnames. CI sets image tags via `kustomize edit set image`.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+
+images:
+  - name: ecom/ecom-gateway
+    newName: 333333333333.dkr.ecr.eu-west-1.amazonaws.com/ecom-gateway
+    newTag: 0.1.0-SNAPSHOT
+  - name: ecom/ecom-user-service
+    newName: 333333333333.dkr.ecr.eu-west-1.amazonaws.com/ecom-user-service
+    newTag: 0.1.0-SNAPSHOT
+  - name: ecom/ecom-catalog-service
+    newName: 333333333333.dkr.ecr.eu-west-1.amazonaws.com/ecom-catalog-service
+    newTag: 0.1.0-SNAPSHOT
+  - name: ecom/ecom-inventory-service
+    newName: 333333333333.dkr.ecr.eu-west-1.amazonaws.com/ecom-inventory-service
+    newTag: 0.1.0-SNAPSHOT
+  - name: ecom/ecom-cart-service
+    newName: 333333333333.dkr.ecr.eu-west-1.amazonaws.com/ecom-cart-service
+    newTag: 0.1.0-SNAPSHOT
+  - name: ecom/ecom-order-service
+    newName: 333333333333.dkr.ecr.eu-west-1.amazonaws.com/ecom-order-service
+    newTag: 0.1.0-SNAPSHOT
+  - name: ecom/ecom-payment-service
+    newName: 333333333333.dkr.ecr.eu-west-1.amazonaws.com/ecom-payment-service
+    newTag: 0.1.0-SNAPSHOT
+  - name: ecom/ecom-notification-service
+    newName: 333333333333.dkr.ecr.eu-west-1.amazonaws.com/ecom-notification-service
+    newTag: 0.1.0-SNAPSHOT
+  - name: ecom/ecom-search-service
+    newName: 333333333333.dkr.ecr.eu-west-1.amazonaws.com/ecom-search-service
+    newTag: 0.1.0-SNAPSHOT
+
+configMapGenerator:
+  - name: ecom-platform-endpoints
+    namespace: ecom
+    behavior: merge
+    options:
+      disableNameSuffixHash: true
+    literals:
+      - ENV_NAME=prod
+      - AWS_ACCOUNT_ID=333333333333
+      - AWS_REGION=eu-west-1
+      - DB_HOST=ecom-prod.RDS_ID_PLACEHOLDER.eu-west-1.rds.amazonaws.com
+      - REDIS_HOST=master.ecom-prod.REDIS_ID_PLACEHOLDER.euw1.cache.amazonaws.com
+      - ELASTICSEARCH_URL=https://ecom-prod.es.vpce.eu-west-1.aws.elastic-cloud.com
+      - KAFKA_BOOTSTRAP_SERVERS=b-1.ecomprod.MSK_ID_PLACEHOLDER.kafka.eu-west-1.amazonaws.com:9098,b-2.ecomprod.MSK_ID_PLACEHOLDER.kafka.eu-west-1.amazonaws.com:9098,b-3.ecomprod.MSK_ID_PLACEHOLDER.kafka.eu-west-1.amazonaws.com:9098
+      - TRACING_SAMPLING_PROBABILITY=0.1
+  - name: gateway-config
+    namespace: ecom
+    behavior: merge
+    literals:
+      - CORS_ALLOWED_ORIGINS=https://www.example.com
+      - PSP_DEV_ROUTES_ENABLED=false
+  - name: payment-service-config
+    namespace: ecom
+    behavior: merge
+    literals:
+      - PSP_MODE=stripe
+  - name: catalog-service-config
+    namespace: ecom
+    behavior: merge
+    literals:
+      - IMAGES_BUCKET=ecom-prod-product-images
+      - IMAGES_CDN_BASE_URL=https://CLOUDFRONT_DOMAIN_PLACEHOLDER
+  - name: notification-service-config
+    namespace: ecom
+    behavior: merge
+    literals:
+      - SMTP_HOST=email-smtp.eu-west-1.amazonaws.com
+
+patches:
+  - target:
+      kind: HorizontalPodAutoscaler
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+  - target:
+      kind: Ingress
+      name: gateway
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: api.example.com
+      - op: replace
+        path: /metadata/annotations/alb.ingress.kubernetes.io~1certificate-arn
+        value: arn:aws:acm:eu-west-1:333333333333:certificate/CERT_ID_PLACEHOLDER
+      - op: replace
+        path: /metadata/annotations/alb.ingress.kubernetes.io~1wafv2-acl-arn
+        value: arn:aws:wafv2:eu-west-1:333333333333:regional/webacl/ecom-prod/WAF_ID_PLACEHOLDER
+      - op: add
+        path: /metadata/annotations/alb.ingress.kubernetes.io~1group.name
+        value: ecom-prod
+  # NetworkPolicy ipBlocks = Terraform VPC layout for prod (vpc_cidr 10.30.0.0/16, modules/vpc cidrsubnet math)
+  - target:
+      kind: NetworkPolicy
+      name: allow-egress-data-stores
+    patch: |-
+      - op: replace
+        path: /spec/egress/0/to/0/ipBlock/cidr
+        value: 10.30.160.0/19
+      - op: replace
+        path: /spec/egress/1/to/0/ipBlock/cidr
+        value: 10.30.0.0/16
+  - target:
+      kind: NetworkPolicy
+      name: gateway-ingress-from-alb
+    patch: |-
+      - op: replace
+        path: /spec/ingress/0/from/0/ipBlock/cidr
+        value: 10.30.0.0/18
+
+# ENV / account id are substituted into IRSA role ARNs, Secrets Manager keys and the collector's env label.
+replacements:
+  - source:
+      kind: ConfigMap
+      name: ecom-platform-endpoints
+      fieldPath: data.ENV_NAME
+    targets:
+      - select:
+          kind: ServiceAccount
+          namespace: ecom
+        fieldPaths:
+          - metadata.annotations.[eks.amazonaws.com/role-arn]
+        options:
+          delimiter: "-"
+          index: 1
+      - select:
+          kind: ExternalSecret
+        fieldPaths:
+          - spec.data.*.remoteRef.key
+        options:
+          delimiter: "/"
+          index: 1
+      - select:
+          kind: Deployment
+          name: otel-collector
+        fieldPaths:
+          - spec.template.spec.containers.[name=otel-collector].env.[name=DEPLOY_ENV].value
+  - source:
+      kind: ConfigMap
+      name: ecom-platform-endpoints
+      fieldPath: data.AWS_ACCOUNT_ID
+    targets:
+      - select:
+          kind: ServiceAccount
+          namespace: ecom
+        fieldPaths:
+          - metadata.annotations.[eks.amazonaws.com/role-arn]
+        options:
+          delimiter: ":"
+          index: 4

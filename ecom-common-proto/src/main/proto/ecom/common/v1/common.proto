@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package ecom.common.v1;
+
+option java_package = "com.ecom.common.proto.v1";
+option java_multiple_files = true;
+
+// Same shape as google.type.Money. units = whole units, nanos = 10^-9 units (same sign as units).
+message Money {
+  string currency_code = 1; // ISO 4217, e.g. "EUR"
+  int64 units = 2;
+  int32 nanos = 3;
+}

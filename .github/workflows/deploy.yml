@@ -1,0 +1,92 @@
+name: Deploy
+
+# staging: automatically after a successful Docker Publish on main.
+# production: same image set, gated by the `production` environment (required reviewers).
+on:
+  workflow_run:
+    workflows: [Docker Publish]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-1' }}
+  SERVICES: gateway user catalog inventory cart order payment notification search
+
+jobs:
+  resolve:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: ecr
+    outputs:
+      images: ${{ steps.tags.outputs.images }}
+      registry: ${{ steps.ecr.outputs.registry }}
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ECR_PUSH_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Resolve one immutable tag per service
+        id: tags
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          # Only changed services were rebuilt: use <sha> where it exists, else that repo's newest image.
+          out=""
+          for s in $SERVICES; do
+            repo="ecom-$s-service"; [[ "$s" == gateway ]] && repo=ecom-gateway
+            if aws ecr describe-images --repository-name "$repo" --image-ids imageTag="$SHA" >/dev/null 2>&1; then
+              tag="$SHA"
+            else
+              tag="$(aws ecr describe-images --repository-name "$repo" \
+                     --query 'sort_by(imageDetails,&imagePushedAt)[-1].imageTags[0]' --output text)"
+            fi
+            [[ -z "$tag" || "$tag" == None ]] && { echo "::error::no image for $repo"; exit 1; }
+            echo "$repo -> $tag"
+            out+="$repo=$tag "
+          done
+          echo "images=$out" >> "$GITHUB_OUTPUT"
+
+  staging:
+    needs: resolve
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: ./.github/actions/kustomize-deploy
+        with:
+          overlay: staging
+          role-arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          region: ${{ env.AWS_REGION }}
+          cluster: ${{ vars.EKS_CLUSTER_NAME || 'ecom-staging' }}
+          registry: ${{ needs.resolve.outputs.registry }}
+          images: ${{ needs.resolve.outputs.images }}
+
+  production:
+    needs: [resolve, staging]
+    runs-on: ubuntu-latest
+    environment: production   # manual approval (required reviewers) configured on the environment
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: ./.github/actions/kustomize-deploy
+        with:
+          overlay: prod
+          role-arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          region: ${{ env.AWS_REGION }}
+          cluster: ${{ vars.EKS_CLUSTER_NAME || 'ecom-prod' }}
+          registry: ${{ needs.resolve.outputs.registry }}
+          images: ${{ needs.resolve.outputs.images }}

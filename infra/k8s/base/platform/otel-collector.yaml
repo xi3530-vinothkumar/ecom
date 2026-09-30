@@ -1,0 +1,188 @@
+# One OTel Collector Deployment per environment (PLAN §9). Receives OTLP traces from services, scrapes their
+# /actuator/prometheus on the management port (pod annotations), fans out to Tempo / Prometheus / Loki in this
+# namespace (install via Helm: tempo, loki, kube-prometheus-stack with remote-write receiver enabled).
+# Datadog is the config-only alternate (see commented exporter). Container stdout logs on EKS are collected by a
+# node-level agent (collector DaemonSet with filelog, or Fluent Bit) -> the same Loki; not part of this Deployment.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otel-collector
+  namespace: ecom-observability
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: otel-collector-pod-discovery
+  namespace: ecom
+rules:
+  - apiGroups: [""]
+    resources: [pods, endpoints, services]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: otel-collector-pod-discovery
+  namespace: ecom
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: otel-collector-pod-discovery
+subjects:
+  - kind: ServiceAccount
+    name: otel-collector
+    namespace: ecom-observability
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: ecom-observability
+data:
+  config.yaml: |
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+      prometheus:
+        config:
+          scrape_configs:
+            - job_name: ecom-services
+              scrape_interval: 15s
+              kubernetes_sd_configs:
+                - role: pod
+                  namespaces:
+                    names: [ecom]
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+                  action: keep
+                  regex: "true"
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+                  action: replace
+                  target_label: __metrics_path__
+                  regex: (.+)
+                - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+                  action: replace
+                  regex: ([^:]+)(?::\d+)?;(\d+)
+                  replacement: $$1:$$2
+                  target_label: __address__
+                - source_labels: [__meta_kubernetes_pod_name]
+                  target_label: pod
+                - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+                  target_label: app
+    processors:
+      memory_limiter:
+        check_interval: 5s
+        limit_percentage: 80
+        spike_limit_percentage: 25
+      batch:
+        timeout: 5s
+      resource/env:
+        attributes:
+          - key: deployment.environment
+            value: ${env:DEPLOY_ENV}
+            action: upsert
+    exporters:
+      otlp/tempo:
+        endpoint: tempo.ecom-observability.svc.cluster.local:4317
+        tls:
+          insecure: true
+      prometheusremotewrite:
+        endpoint: http://prometheus.ecom-observability.svc.cluster.local:9090/api/v1/write
+        external_labels:
+          env: ${env:DEPLOY_ENV}
+      otlphttp/loki:
+        endpoint: http://loki.ecom-observability.svc.cluster.local:3100/otlp
+      # datadog:
+      #   api:
+      #     key: ${env:DD_API_KEY}
+      #     site: datadoghq.eu
+    service:
+      extensions: [health_check]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, resource/env, batch]
+          exporters: [otlp/tempo]
+        metrics:
+          receivers: [otlp, prometheus]
+          processors: [memory_limiter, resource/env, batch]
+          exporters: [prometheusremotewrite]
+        logs:
+          receivers: [otlp]
+          processors: [memory_limiter, resource/env, batch]
+          exporters: [otlphttp/loki]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: ecom-observability
+  labels:
+    app.kubernetes.io/name: otel-collector
+spec:
+  replicas: 1   # single instance: the prometheus receiver would double-scrape with more (use target allocator to scale)
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-collector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: otel-collector
+      annotations:
+        checksum/config: "bump-on-change"
+    spec:
+      serviceAccountName: otel-collector
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.114.0
+          args: ["--config=/conf/config.yaml"]
+          env:
+            - name: DEPLOY_ENV
+              value: ENV
+          ports:
+            - { name: otlp-grpc, containerPort: 4317 }
+            - { name: otlp-http, containerPort: 4318 }
+            - { name: health, containerPort: 13133 }
+          resources:
+            requests: { cpu: 200m, memory: 256Mi }
+            limits: { cpu: 1000m, memory: 1Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          livenessProbe:
+            httpGet: { path: /, port: health }
+          readinessProbe:
+            httpGet: { path: /, port: health }
+          volumeMounts:
+            - name: config
+              mountPath: /conf
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: ecom-observability
+spec:
+  selector:
+    app.kubernetes.io/name: otel-collector
+  ports:
+    - { name: otlp-grpc, port: 4317, targetPort: otlp-grpc, appProtocol: grpc }
+    - { name: otlp-http, port: 4318, targetPort: otlp-http }

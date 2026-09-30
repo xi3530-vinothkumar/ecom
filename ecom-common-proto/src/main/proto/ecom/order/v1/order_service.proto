@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package ecom.order.v1;
+
+import "ecom/common/v1/common.proto";
+
+option java_package = "com.ecom.order.proto.v1";
+option java_multiple_files = true;
+
+service OrderService {
+  rpc GetOrder(GetOrderRequest) returns (Order);
+}
+
+message GetOrderRequest { string order_id = 1; }
+
+enum OrderStatus {
+  ORDER_STATUS_UNSPECIFIED = 0;
+  PENDING = 1;
+  CONFIRMED = 2;
+  CANCELLED = 3;
+}
+
+message OrderLine {
+  string sku = 1;
+  string name = 2;
+  int32 quantity = 3;
+  ecom.common.v1.Money unit_price = 4;
+}
+
+message Order {
+  string order_id = 1;
+  string user_id = 2;
+  OrderStatus status = 3;
+  ecom.common.v1.Money total = 4;
+  // PSP token created client-side (never raw card data).
+  string payment_method_ref = 5;
+  repeated OrderLine lines = 6;
+}

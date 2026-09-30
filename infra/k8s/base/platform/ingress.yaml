@@ -1,0 +1,42 @@
+# Public entrypoint: AWS ALB (AWS Load Balancer Controller) -> gateway pods (IP targets).
+# TLS terminates at the ALB (ACM cert); WAFv2 ACL attached. Host/cert/WAF are patched per overlay.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gateway
+  namespace: ecom
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:eu-west-1:000000000000:certificate/CERT_ID_PLACEHOLDER
+    alb.ingress.kubernetes.io/wafv2-acl-arn: arn:aws:wafv2:eu-west-1:000000000000:regional/webacl/ecom/WAF_ID_PLACEHOLDER
+    alb.ingress.kubernetes.io/healthcheck-port: "8081"
+    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health/readiness
+    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=60,routing.http.drop_invalid_header_fields.enabled=true
+    alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=30
+    # /actuator is never public: fixed 404 at the ALB (the gateway also serves actuator on management port 8081)
+    alb.ingress.kubernetes.io/actions.block-actuator: >-
+      {"type":"fixed-response","fixedResponseConfig":{"contentType":"text/plain","statusCode":"404","messageBody":"Not Found"}}
+spec:
+  ingressClassName: alb
+  rules:
+    - host: api.example.com
+      http:
+        paths:
+          - path: /actuator
+            pathType: Prefix
+            backend:
+              service:
+                name: block-actuator
+                port:
+                  name: use-annotation
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  name: http

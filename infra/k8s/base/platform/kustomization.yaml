@@ -1,0 +1,42 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# No namespace transform here: resources span `ecom` and `ecom-observability`.
+resources:
+  - namespaces.yaml
+  - cluster-secret-store.yaml
+  - networkpolicies-ecom.yaml
+  - networkpolicies-observability.yaml
+  - otel-collector.yaml
+  - ingress.yaml
+configMapGenerator:
+  # Shared, env-specific endpoints consumed via envFrom by every Deployment.
+  # Overlays merge real values; ENV_NAME / AWS_ACCOUNT_ID also drive the kustomize replacements.
+  - name: ecom-platform-endpoints
+    namespace: ecom
+    options:
+      disableNameSuffixHash: true
+    literals:
+      - ENV_NAME=ENV
+      - AWS_ACCOUNT_ID=000000000000
+      - AWS_REGION=eu-west-1
+      - DB_HOST=RDS_ENDPOINT_PLACEHOLDER
+      - DB_PORT=5432
+      - REDIS_HOST=REDIS_ENDPOINT_PLACEHOLDER
+      - REDIS_PORT=6379
+      - SPRING_DATA_REDIS_SSL_ENABLED=true
+      - ELASTICSEARCH_URL=https://ELASTICSEARCH_ENDPOINT_PLACEHOLDER
+      - KAFKA_BOOTSTRAP_SERVERS=MSK_BOOTSTRAP_IAM_PLACEHOLDER:9098
+      # MSK IAM auth (requires software.amazon.msk:aws-msk-iam-auth on the service classpath)
+      - SPRING_KAFKA_SECURITY_PROTOCOL=SASL_SSL
+      - SPRING_KAFKA_PROPERTIES_SASL_MECHANISM=AWS_MSK_IAM
+      - SPRING_KAFKA_PROPERTIES_SASL_JAAS_CONFIG=software.amazon.msk.auth.iam.IAMLoginModule required;
+      - SPRING_KAFKA_PROPERTIES_SASL_CLIENT_CALLBACK_HANDLER_CLASS=software.amazon.msk.auth.iam.IAMClientCallbackHandler
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.ecom-observability.svc.cluster.local:4318
+      - TRACING_SAMPLING_PROBABILITY=0.1
+      - JAVA_TOOL_OPTIONS=-XX:+ExitOnOutOfMemoryError
+  - name: ecom-alert-rules
+    namespace: ecom-observability
+    files:
+      # copy of infra/docker-compose/config/prometheus/alert-rules.yml (CI checks they are identical);
+      # mount into the Prometheus/Mimir/AMP ruler of your choice
+      - alert-rules.yml=prometheus-alert-rules.yml

@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ecom
+labels:
+  - pairs:
+      app.kubernetes.io/name: payment-service
+      app.kubernetes.io/part-of: ecom
+    includeSelectors: true
+resources:
+  - serviceaccount.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - externalsecret.yaml
+configMapGenerator:
+  - name: payment-service-config
+    literals:
+      - HTTP_PORT=8080
+      - GRPC_PORT=9090
+      - MANAGEMENT_SERVER_PORT=8081
+      - KAFKA_CREATE_TOPICS=false
+      - ORDER_GRPC_ADDRESS=order-service:9090
+      - INVENTORY_GRPC_ADDRESS=inventory-service:9090
+      - PSP_MODE=stripe
+      - PSP_BASE_URL=https://api.stripe.com

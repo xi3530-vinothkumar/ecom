@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: catalog-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/catalogdb}
+    username: ${DB_USERNAME:catalog}
+    password: ${DB_PASSWORD:catalog}
+  jpa:
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100
+        jdbc:
+          time_zone: UTC
+server:
+  port: ${HTTP_PORT:8082}
+ecom:
+  grpc:
+    server:
+      port: ${GRPC_PORT:9092}
+  kafka:
+    create-topics: ${KAFKA_CREATE_TOPICS:false}
+  catalog:
+    images:
+      enabled: ${IMAGES_ENABLED:false}
+      bucket: ${IMAGES_BUCKET:}
+      region: ${AWS_REGION:eu-west-1}
+      cdn-base-url: ${IMAGES_CDN_BASE_URL:}
+      upload-url-ttl: 10m

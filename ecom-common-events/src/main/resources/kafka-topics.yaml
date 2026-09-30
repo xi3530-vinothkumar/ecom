@@ -1,0 +1,25 @@
+# Canonical topic list. Read by:
+#  - Terraform (infra/terraform/modules/kafka-topics) to provision MSK topics (+ .dlt twins), RF=3
+#  - ecom-platform-starter (local profile only) to create topics with RF=1 in Docker Compose
+#  - KafkaTopicsYamlTest, which fails the build if this drifts from EventTopics.java
+# Partition key is always the aggregate id (orderId / sku / productId / userId).
+defaults:
+  partitions: 6
+  config:
+    retention.ms: "604800000"   # 7 days
+    min.insync.replicas: "2"    # applied only where RF >= 3
+topics:
+  - name: ecom.order.order-created.v1
+  - name: ecom.order.order-confirmed.v1
+  - name: ecom.order.order-cancelled.v1
+  - name: ecom.inventory.inventory-reserved.v1
+  - name: ecom.inventory.inventory-reservation-failed.v1
+  - name: ecom.inventory.reservation-expired.v1
+  - name: ecom.inventory.stock-level-changed.v1
+  - name: ecom.payment.payment-authorized.v1
+  - name: ecom.payment.payment-failed.v1
+  - name: ecom.payment.payment-voided.v1
+  - name: ecom.catalog.product-created.v1
+  - name: ecom.catalog.product-updated.v1
+  - name: ecom.catalog.product-deleted.v1
+  - name: ecom.user.user-registered.v1

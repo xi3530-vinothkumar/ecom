@@ -1,0 +1,22 @@
+target/
+*.class
+.idea/
+*.iml
+.vscode/
+.DS_Store
+infra/docker-compose/.env
+*.log
+dependency-check-report.html
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+backend.hcl
+crash.log
+*.auto.tfvars
+
+# local JWT keys from scripts/dev-keys.sh
+.dev-keys/

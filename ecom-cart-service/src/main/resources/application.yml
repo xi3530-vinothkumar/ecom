@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: cart-service
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2s
+server:
+  port: ${HTTP_PORT:8084}
+management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,redis
+ecom:
+  grpc:
+    server:
+      port: ${GRPC_PORT:9094}
+    clients:
+      catalog:
+        address: ${CATALOG_GRPC_ADDRESS:localhost:9092}
+  kafka:
+    create-topics: ${KAFKA_CREATE_TOPICS:false}
+  cart:
+    guest-ttl: 30d
+    max-quantity: 99
+    max-lines: 100
+    processed-event-ttl: 7d
+    catalog-cache:
+      ttl: 30s
+      max-size: 10000

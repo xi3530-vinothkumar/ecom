@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: cart-service
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: cart-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      appProtocol: http
+    - name: grpc
+      port: 9090
+      targetPort: grpc
+      appProtocol: kubernetes.io/h2c
+    - name: management
+      port: 8081
+      targetPort: management

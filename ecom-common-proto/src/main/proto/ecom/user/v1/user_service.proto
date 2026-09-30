@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package ecom.user.v1;
+
+option java_package = "com.ecom.user.proto.v1";
+option java_multiple_files = true;
+
+service UserService {
+  rpc GetUser(GetUserRequest) returns (User);
+  rpc GetUserRoles(GetUserRolesRequest) returns (GetUserRolesResponse);
+  rpc GetAddress(GetAddressRequest) returns (Address);
+}
+
+message GetUserRequest { string user_id = 1; }
+
+message User {
+  string user_id = 1;
+  string email = 2;
+  string full_name = 3;
+  string phone = 4;
+  repeated string roles = 5;
+}
+
+message GetUserRolesRequest { string user_id = 1; }
+message GetUserRolesResponse { repeated string roles = 1; }
+
+message GetAddressRequest {
+  string user_id = 1;
+  string address_id = 2;
+}
+
+message Address {
+  string address_id = 1;
+  string user_id = 2;
+  string line1 = 3;
+  string line2 = 4;
+  string city = 5;
+  string postal_code = 6;
+  string country_code = 7;
+}

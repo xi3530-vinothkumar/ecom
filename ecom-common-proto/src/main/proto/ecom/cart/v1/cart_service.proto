@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package ecom.cart.v1;
+
+option java_package = "com.ecom.cart.proto.v1";
+option java_multiple_files = true;
+
+service CartService {
+  rpc GetCart(GetCartRequest) returns (Cart);
+  // Guest -> user merge on login; policy = max quantity wins per SKU; guest cart deleted after.
+  rpc MergeCart(MergeCartRequest) returns (Cart);
+}
+
+message GetCartRequest { string user_id = 1; }
+
+message CartLine {
+  string sku = 1;
+  int32 quantity = 2;
+}
+
+message Cart {
+  string user_id = 1;
+  repeated CartLine lines = 2;
+}
+
+message MergeCartRequest {
+  string guest_cart_id = 1;
+  string user_id = 2;
+}

@@ -1,0 +1,37 @@
+name: kustomize-deploy
+description: Pin image tags in an overlay with `kustomize edit set image`, then `kubectl apply -k` and wait for rollouts.
+inputs:
+  overlay: { description: "overlay dir under infra/k8s/overlays", required: true }
+  role-arn: { description: "OIDC deploy role", required: true }
+  region: { description: "AWS region", required: true }
+  cluster: { description: "EKS cluster name", required: true }
+  registry: { description: "ECR registry host", required: true }
+  images: { description: "space-separated repo=tag pairs", required: true }
+runs:
+  using: composite
+  steps:
+    - uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.role-arn }}
+        aws-region: ${{ inputs.region }}
+    - uses: imranismail/setup-kustomize@v2
+      with:
+        kustomize-version: "5.5.0"
+    - name: Set images
+      shell: bash
+      working-directory: infra/k8s/overlays/${{ inputs.overlay }}
+      run: |
+        for pair in ${{ inputs.images }}; do
+          repo="${pair%%=*}"; tag="${pair#*=}"
+          kustomize edit set image "ecom/$repo=${{ inputs.registry }}/$repo:$tag"
+        done
+        kustomize build . > /tmp/rendered.yaml
+        grep -E '^\s+image: ' /tmp/rendered.yaml | sort -u
+    - name: Apply
+      shell: bash
+      run: |
+        aws eks update-kubeconfig --name "${{ inputs.cluster }}" --region "${{ inputs.region }}"
+        kubectl apply -k "infra/k8s/overlays/${{ inputs.overlay }}"
+        for d in $(kubectl -n ecom get deploy -o name); do
+          kubectl -n ecom rollout status "$d" --timeout=10m
+        done

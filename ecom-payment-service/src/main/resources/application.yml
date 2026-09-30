@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: payment-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/paymentdb}
+    username: ${DB_USERNAME:payment}
+    password: ${DB_PASSWORD:payment}
+server:
+  port: ${HTTP_PORT:8086}
+ecom:
+  grpc:
+    server:
+      port: ${GRPC_PORT:9096}
+    clients:
+      order:
+        address: ${ORDER_GRPC_ADDRESS:localhost:9095}
+      inventory:
+        address: ${INVENTORY_GRPC_ADDRESS:localhost:9093}
+  kafka:
+    create-topics: ${KAFKA_CREATE_TOPICS:false}
+  payment:
+    psp: ${PSP_MODE:fake}
+    api-key: ${PSP_API_KEY:}
+    base-url: ${PSP_BASE_URL:https://api.stripe.com}
+    webhook-secret: ${PSP_WEBHOOK_SECRET:whsec_local_dev_secret}
+    webhook-tolerance: 5m
+    connect-timeout: 5s
+    read-timeout: 30s

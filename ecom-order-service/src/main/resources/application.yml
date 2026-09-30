@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: order-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/orderdb}
+    username: ${DB_USERNAME:order}
+    password: ${DB_PASSWORD:order}
+server:
+  port: ${HTTP_PORT:8085}
+ecom:
+  grpc:
+    server:
+      port: ${GRPC_PORT:9095}
+    clients:
+      cart:
+        address: ${CART_GRPC_ADDRESS:localhost:9094}
+      catalog:
+        address: ${CATALOG_GRPC_ADDRESS:localhost:9092}
+      user:
+        address: ${USER_GRPC_ADDRESS:localhost:9091}
+      payment:
+        address: ${PAYMENT_GRPC_ADDRESS:localhost:9096}
+  kafka:
+    create-topics: ${KAFKA_CREATE_TOPICS:false}
+  order:
+    currency: EUR
+    vat-rate: 0.21
+    shipping-fee: 4.95
+    pending-stale-after: 30m
+    pending-stale-refresh: 60s
+logging:
+  level:
+    # a unique violation on (user_id, idempotency_key) is the expected concurrent-replay path; SQL errors
+    # still propagate as exceptions and are logged by whoever handles them
+    org.hibernate.engine.jdbc.spi.SqlExceptionHelper: OFF

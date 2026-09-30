@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ecom
+labels:
+  - pairs:
+      app.kubernetes.io/name: user-service
+      app.kubernetes.io/part-of: ecom
+    includeSelectors: true
+resources:
+  - serviceaccount.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - externalsecret.yaml
+configMapGenerator:
+  - name: user-service-config
+    literals:
+      - HTTP_PORT=8080
+      - GRPC_PORT=9090
+      - MANAGEMENT_SERVER_PORT=8081
+      - KAFKA_CREATE_TOPICS=false
+      - CART_GRPC_ADDRESS=cart-service:9090
+      - JWT_KEY_ID=ecom-2026-01
+      - JWT_EPHEMERAL_KEY=false
+      - JWT_ISSUER=ecom-user-service
+      - JWT_AUDIENCE=ecom
+      # browsers get the refresh token only as an HttpOnly cookie in EKS
+      - REFRESH_TOKEN_IN_BODY=false

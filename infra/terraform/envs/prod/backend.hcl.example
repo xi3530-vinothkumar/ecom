@@ -1,0 +1,6 @@
+# cp backend.hcl.example backend.hcl && terraform init -backend-config=backend.hcl   (backend.hcl is gitignored)
+bucket         = "REPLACE_ME-ecom-terraform-state" # PLACEHOLDER: versioned + encrypted S3 bucket
+key            = "ecom/prod/terraform.tfstate"
+region         = "eu-west-1"
+dynamodb_table = "REPLACE_ME-ecom-terraform-locks" # PLACEHOLDER: partition key LockID (S)
+encrypt        = true

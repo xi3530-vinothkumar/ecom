@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package ecom.payment.v1;
+
+import "ecom/common/v1/common.proto";
+
+option java_package = "com.ecom.payment.proto.v1";
+option java_multiple_files = true;
+
+service PaymentService {
+  rpc GetTransaction(GetTransactionRequest) returns (PaymentTransaction);
+}
+
+message GetTransactionRequest { string order_id = 1; }
+
+message PaymentTransaction {
+  string transaction_id = 1;
+  string order_id = 2;
+  // AUTHORIZED, REQUIRES_ACTION, FAILED, VOIDED, CAPTURED
+  string status = 3;
+  ecom.common.v1.Money amount = 4;
+  string psp_reference = 5;
+  // Set only while status = REQUIRES_ACTION: PSP client secret the browser uses to complete 3DS/SCA.
+  string client_secret = 6;
+}

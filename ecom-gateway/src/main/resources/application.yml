@@ -1,0 +1,66 @@
+spring:
+  application:
+    name: gateway
+  main:
+    web-application-type: reactive
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 500ms
+  cloud:
+    gateway:
+      httpclient:
+        connect-timeout: 2000
+        response-timeout: 15s
+      filter:
+        # grpc-api arrives transitively via ecom-platform-starter (proto contracts); the Gateway
+        # is a pure HTTP proxy and the JSON->gRPC filter would need unshaded grpc-netty
+        json-to-grpc:
+          enabled: false
+        request-rate-limiter:
+          # a key always exists (user id or IP); keep the default deny for safety
+          deny-empty-key: true
+server:
+  port: ${HTTP_PORT:8080}
+  max-http-request-header-size: 16KB
+ecom:
+  gateway:
+    backends:
+      user: ${USER_SERVICE_URI:http://localhost:8081}
+      catalog: ${CATALOG_SERVICE_URI:http://localhost:8082}
+      inventory: ${INVENTORY_SERVICE_URI:http://localhost:8083}
+      cart: ${CART_SERVICE_URI:http://localhost:8084}
+      order: ${ORDER_SERVICE_URI:http://localhost:8085}
+      payment: ${PAYMENT_SERVICE_URI:http://localhost:8086}
+      search: ${SEARCH_SERVICE_URI:http://localhost:8088}
+    jwt:
+      jwks-uri: ${USER_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
+      issuer: ${JWT_ISSUER:ecom-user-service}
+      audience: ${JWT_AUDIENCE:ecom}
+    cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+    psp-dev-routes-enabled: ${PSP_DEV_ROUTES_ENABLED:false}
+    trusted-proxy-hops: ${TRUSTED_PROXY_HOPS:0}
+    webhook-max-body-size: 256KB
+    rate-limits:
+      defaults:
+        replenish-rate: ${RATE_LIMIT_DEFAULT_REPLENISH:50}
+        burst-capacity: ${RATE_LIMIT_DEFAULT_BURST:100}
+        requested-tokens: 1
+      # stricter, keyed by client IP: 6 tokens per attempt at 1 token/s = ~10 attempts/min, burst 10
+      login:
+        replenish-rate: 1
+        burst-capacity: 60
+        requested-tokens: 6
+      webhook:
+        replenish-rate: 20
+        burst-capacity: 40
+        requested-tokens: 1
+management:
+  endpoint:
+    health:
+      group:
+        # the platform default includes "db"; the Gateway has none, and Redis (rate limiting,
+        # fail-open) must not take the edge out of rotation
+        readiness:
+          include: readinessState

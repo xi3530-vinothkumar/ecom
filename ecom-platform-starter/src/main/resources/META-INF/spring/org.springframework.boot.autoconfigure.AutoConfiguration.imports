@@ -1,0 +1,6 @@
+com.ecom.platform.web.WebAutoConfiguration
+com.ecom.platform.grpc.GrpcAutoConfiguration
+com.ecom.platform.kafka.KafkaPlatformAutoConfiguration
+com.ecom.platform.kafka.OutboxAutoConfiguration
+com.ecom.platform.kafka.IdempotentConsumerAutoConfiguration
+com.ecom.platform.security.SecurityAutoConfiguration

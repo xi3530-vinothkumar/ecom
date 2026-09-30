@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package ecom.inventory.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option java_package = "com.ecom.inventory.proto.v1";
+option java_multiple_files = true;
+
+// Read-only: reservations are created/released/committed only via saga events.
+service InventoryService {
+  rpc CheckAvailability(CheckAvailabilityRequest) returns (CheckAvailabilityResponse);
+  rpc GetReservation(GetReservationRequest) returns (Reservation);
+}
+
+message SkuQuantity {
+  string sku = 1;
+  int32 quantity = 2;
+}
+
+message CheckAvailabilityRequest { repeated SkuQuantity items = 1; }
+
+message SkuAvailability {
+  string sku = 1;
+  int32 available = 2;
+  bool sufficient = 3;
+}
+
+message CheckAvailabilityResponse {
+  repeated SkuAvailability items = 1;
+  bool all_available = 2;
+}
+
+message GetReservationRequest { string order_id = 1; }
+
+enum ReservationStatus {
+  RESERVATION_STATUS_UNSPECIFIED = 0;
+  RESERVED = 1;
+  EXPIRING = 2;
+  COMMITTED = 3;
+  RELEASED = 4;
+}
+
+message Reservation {
+  string order_id = 1;
+  ReservationStatus status = 2;
+  google.protobuf.Timestamp expires_at = 3;
+  repeated SkuQuantity lines = 4;
+}

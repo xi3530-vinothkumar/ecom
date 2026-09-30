@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: user-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/userdb}
+    username: ${DB_USERNAME:user}
+    password: ${DB_PASSWORD:user}
+server:
+  port: ${HTTP_PORT:8081}
+ecom:
+  grpc:
+    server:
+      port: ${GRPC_PORT:9091}
+    clients:
+      cart:
+        address: ${CART_GRPC_ADDRESS:localhost:9094}
+        # on the login path: keep a slow Cart from stalling logins (merge is best effort)
+        deadline: 1s
+  kafka:
+    create-topics: ${KAFKA_CREATE_TOPICS:false}
+  jwt:
+    issuer: ${JWT_ISSUER:ecom-user-service}
+    audience: ${JWT_AUDIENCE:ecom}
+    key-id: ${JWT_KEY_ID:local-dev}
+    private-key-pem: ${JWT_PRIVATE_KEY_PEM:}
+    access-token-ttl: 15m
+  auth:
+    ephemeral-jwt-key: ${JWT_EPHEMERAL_KEY:false}
+    refresh-token-ttl: 14d
+    refresh-token-in-body: ${REFRESH_TOKEN_IN_BODY:false}
+    admin-email: ${ADMIN_EMAIL:}
+    admin-password: ${ADMIN_PASSWORD:}
+    lockout:
+      max-failures: 5
+      window: 15m
+      duration: 15m

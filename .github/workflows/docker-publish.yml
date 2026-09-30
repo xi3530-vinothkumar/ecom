@@ -1,0 +1,91 @@
+name: Docker Publish
+
+# On merge to main: build images for changed services (spring-boot:build-image), Trivy-scan them
+# (fail on HIGH/CRITICAL that have a fix), push to ECR via GitHub OIDC. deploy.yml picks up from here.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pom.xml"
+      - "ecom-*/**"
+  workflow_dispatch:
+    inputs:
+      all:
+        description: Build all images
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: docker-publish
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-1' }}
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.detect.outputs.services }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: detect
+        run: |
+          if [[ "${{ inputs.all }}" == "true" ]]; then
+            scripts/changed-modules.sh 0000000000000000000000000000000000000000
+          else
+            scripts/changed-modules.sh "${{ github.event.before }}" "${{ github.sha }}"
+          fi
+
+  image:
+    needs: changes
+    if: needs.changes.outputs.services != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: ecr   # holds AWS_ECR_PUSH_ROLE_ARN (the ecom-*-github-deploy role of the ECR account)
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ECR_PUSH_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Resolve module / image
+        id: meta
+        run: |
+          s="${{ matrix.service }}"
+          if [[ "$s" == gateway ]]; then m=ecom-gateway; else m="ecom-$s-service"; fi
+          echo "module=$m" >> "$GITHUB_OUTPUT"
+          echo "image=${{ steps.ecr.outputs.registry }}/$m:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+      - name: Build image (Cloud Native Buildpacks)
+        run: |
+          mvn -B -ntp -DskipTests install -pl "${{ steps.meta.outputs.module }}" -am
+          mvn -B -ntp -DskipTests spring-boot:build-image -pl "${{ steps.meta.outputs.module }}" \
+            -Dimage.registry="${{ steps.ecr.outputs.registry }}" -Dimage.tag="${{ github.sha }}"
+      - name: Trivy scan (HIGH/CRITICAL with a fix available)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.meta.outputs.image }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          vuln-type: os,library
+          exit-code: "1"
+          format: table
+      - name: Push
+        run: docker push "${{ steps.meta.outputs.image }}"

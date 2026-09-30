@@ -1,0 +1,265 @@
+# Terraform for infra/terraform/envs/{dev,staging,prod}.
+#  - PR:   fmt + validate + plan per env (read-only plan role), plan posted as a PR comment.
+#  - main: plan per env (saved as artifact) -> apply dev -> apply staging -> apply prod.
+#          Each apply job runs in a GitHub Environment; `production` requires manual approval.
+#
+# Required configuration:
+#  repo variables : TF_STATE_BUCKET, TF_LOCK_TABLE, AWS_REGION (default eu-west-1),
+#                   TF_RUNNER (optional; a self-hosted runner label inside the VPC, needed once
+#                   enable_db_bootstrap / enable_kafka_topics are turned on)
+#  repo secrets   : AWS_TERRAFORM_PLAN_ROLE_ARN_{DEV,STAGING,PROD}  (output github_terraform_plan_role_arn)
+#                   REDIS_AUTH_TOKEN_{DEV,STAGING,PROD}              (TF_VAR_redis_auth_token)
+#  env secrets    : AWS_TERRAFORM_ROLE_ARN in Environments dev / staging / production
+#                   (output github_terraform_role_arn)
+name: infra
+
+on:
+  pull_request:
+    paths:
+      - "infra/terraform/**"
+      - "ecom-common-events/src/main/resources/kafka-topics.yaml"
+      - ".github/workflows/infra.yml"
+  push:
+    branches: [main]
+    paths:
+      - "infra/terraform/**"
+      - "ecom-common-events/src/main/resources/kafka-topics.yaml"
+      - ".github/workflows/infra.yml"
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: terraform-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: false
+
+env:
+  TF_VERSION: 1.9.8
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-1' }}
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: terraform fmt
+        run: terraform fmt -check -recursive -diff infra/terraform
+
+  plan:
+    needs: fmt
+    runs-on: ${{ vars.TF_RUNNER || 'ubuntu-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - env: dev
+            suffix: DEV
+          - env: staging
+            suffix: STAGING
+          - env: prod
+            suffix: PROD
+    defaults:
+      run:
+        working-directory: infra/terraform/envs/${{ matrix.env }}
+    env:
+      TF_VAR_redis_auth_token: ${{ secrets[format('REDIS_AUTH_TOKEN_{0}', matrix.suffix)] }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets[format('AWS_TERRAFORM_PLAN_ROLE_ARN_{0}', matrix.suffix)] }}
+          role-session-name: gha-tf-plan-${{ matrix.env }}-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=ecom/${{ matrix.env }}/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}" \
+            -backend-config="encrypt=true"
+
+      - name: terraform validate
+        run: terraform validate -no-color
+
+      - name: terraform plan
+        id: plan
+        run: |
+          set +e
+          terraform plan -lock-timeout=5m -no-color -detailed-exitcode -out=tfplan > plan.log 2>&1
+          ec=$?
+          set -e
+          cat plan.log
+          if [ "$ec" -eq 1 ]; then exit 1; fi
+          echo "changes=$([ "$ec" -eq 2 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          terraform show -no-color tfplan > plan.txt
+
+      - name: Post plan to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          PLAN_FILE: infra/terraform/envs/${{ matrix.env }}/plan.txt
+          TF_ENV: ${{ matrix.env }}
+          HAS_CHANGES: ${{ steps.plan.outputs.changes }}
+        with:
+          script: |
+            const fs = require('fs');
+            const env = process.env.TF_ENV;
+            const marker = `<!-- terraform-plan:${env} -->`;
+            const max = 60000;
+            let plan = fs.readFileSync(process.env.PLAN_FILE, 'utf8');
+            if (plan.length > max) {
+              plan = plan.substring(0, max) + `\n\n... truncated (${plan.length} chars). Full plan in the workflow run log.`;
+            }
+            const summary = process.env.HAS_CHANGES === 'true' ? 'changes pending' : 'no changes';
+            const body = `${marker}\n### Terraform plan: \`${env}\` (${summary})\n` +
+              `<details><summary>Show plan</summary>\n\n\`\`\`hcl\n${plan}\n\`\`\`\n</details>\n\n` +
+              `_Run [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}), commit ${context.sha.substring(0, 7)}_`;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, per_page: 100,
+            });
+            const existing = comments.find(c => c.body && c.body.startsWith(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner, repo: context.repo.repo, comment_id: existing.id, body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body,
+              });
+            }
+
+      - name: Upload saved plan
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ matrix.env }}
+          path: infra/terraform/envs/${{ matrix.env }}/tfplan
+          retention-days: 5
+
+  # ---------------------------------------------------------------- apply (main only, sequential)
+  apply-dev:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: plan
+    runs-on: ${{ vars.TF_RUNNER || 'ubuntu-latest' }}
+    environment: dev
+    defaults:
+      run:
+        working-directory: infra/terraform/envs/dev
+    env:
+      TF_VAR_redis_auth_token: ${{ secrets.REDIS_AUTH_TOKEN_DEV }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          role-session-name: gha-tf-apply-dev-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: tfplan-dev
+          path: infra/terraform/envs/dev
+      - name: terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=ecom/dev/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}" \
+            -backend-config="encrypt=true"
+      - name: terraform apply (saved plan)
+        run: terraform apply -lock-timeout=5m -auto-approve tfplan
+
+  apply-staging:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: apply-dev
+    runs-on: ${{ vars.TF_RUNNER || 'ubuntu-latest' }}
+    environment: staging
+    defaults:
+      run:
+        working-directory: infra/terraform/envs/staging
+    env:
+      TF_VAR_redis_auth_token: ${{ secrets.REDIS_AUTH_TOKEN_STAGING }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          role-session-name: gha-tf-apply-staging-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: tfplan-staging
+          path: infra/terraform/envs/staging
+      - name: terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=ecom/staging/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}" \
+            -backend-config="encrypt=true"
+      - name: terraform apply (saved plan)
+        run: terraform apply -lock-timeout=5m -auto-approve tfplan
+
+  apply-prod:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: apply-staging
+    runs-on: ${{ vars.TF_RUNNER || 'ubuntu-latest' }}
+    # Same approval-gated Environment as production deploys (deploy.yml).
+    environment: production
+    defaults:
+      run:
+        working-directory: infra/terraform/envs/prod
+    env:
+      TF_VAR_redis_auth_token: ${{ secrets.REDIS_AUTH_TOKEN_PROD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          role-session-name: gha-tf-apply-prod-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: tfplan-prod
+          path: infra/terraform/envs/prod
+      - name: terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=ecom/prod/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="dynamodb_table=${{ vars.TF_LOCK_TABLE }}" \
+            -backend-config="encrypt=true"
+      # A saved plan that went stale (state changed while waiting for approval) is rejected by Terraform;
+      # re-run the workflow to produce a fresh plan.
+      - name: terraform apply (saved plan)
+        run: terraform apply -lock-timeout=5m -auto-approve tfplan

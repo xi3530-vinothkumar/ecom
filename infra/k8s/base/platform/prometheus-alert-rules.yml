@@ -1,0 +1,70 @@
+# Ecom alert rules (PLAN §3 backstops + platform health). Shared by Compose and EKS
+# (infra/k8s copies these into the Prometheus/Mimir ruler; keep in sync).
+groups:
+  - name: ecom-saga
+    rules:
+      - alert: OutboxBacklog
+        # ecom.outbox.pending gauge from ecom-platform-starter OutboxRelay
+        expr: max by (service) (ecom_outbox_pending) > 100
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Outbox backlog in {{ $labels.service }}"
+          description: "{{ $value }} unpublished outbox rows for >5m. Relay stuck or Kafka unreachable."
+      - alert: OutboxBacklogCritical
+        expr: max by (service) (ecom_outbox_pending) > 1000
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: "Outbox backlog critical in {{ $labels.service }}"
+          description: "{{ $value }} unpublished outbox rows. Saga events are not flowing."
+      - alert: StalePendingOrders
+        # orders in PENDING for > 30m (order-service gauge)
+        expr: max(ecom_order_pending_stale) > 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Orders stuck in PENDING > 30m"
+          description: "{{ $value }} orders stuck. Check DLTs / order_saga_state; do NOT auto-release stock."
+      - alert: StaleExpiringReservations
+        # reservations in EXPIRING for > 1h (inventory-service gauge)
+        expr: max(ecom_inventory_reservations_expiring_stale) > 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Reservations stuck in EXPIRING > 1h"
+          description: "{{ $value }} reservations awaiting an Order decision. Likely a DLT'd OrderCancelled/OrderConfirmed; replay from DLT."
+      - alert: DeadLetterTraffic
+        # kafka-exporter: any new record on a <topic>.dlt
+        expr: sum by (topic) (increase(kafka_topic_partition_current_offset{topic=~".+\\.dlt"}[10m])) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "Records dead-lettered to {{ $labels.topic }}"
+          description: "{{ $value }} records in 10m. Inspect in Redpanda Console, fix, then replay."
+
+  - name: ecom-platform
+    rules:
+      - alert: HighHttp5xxRate
+        expr: |
+          sum by (service) (rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+            /
+          sum by (service) (rate(http_server_requests_seconds_count[5m])) > 0.05
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "5xx rate > 5% on {{ $labels.service }}"
+          description: "{{ $value | humanizePercentage }} of requests failing."
+      - alert: CircuitBreakerOpen
+        # resilience4j-micrometer TaggedCircuitBreakerMetrics
+        expr: max by (service, name) (resilience4j_circuitbreaker_state{state=~"open|forced_open"}) == 1
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: "Circuit breaker {{ $labels.name }} open in {{ $labels.service }}"
+          description: "Calls from {{ $labels.service }} to {{ $labels.name }} are short-circuited."
+      - alert: ServiceDown
+        expr: up{job="ecom-services"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.instance }} is not scrapeable"

@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: inventory-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/inventorydb}
+    username: ${DB_USERNAME:inventory}
+    password: ${DB_PASSWORD:inventory}
+  kafka:
+    listener:
+      concurrency: 3
+server:
+  port: ${HTTP_PORT:8083}
+ecom:
+  grpc:
+    server:
+      port: ${GRPC_PORT:9093}
+  kafka:
+    create-topics: ${KAFKA_CREATE_TOPICS:false}
+  inventory:
+    reservation-ttl: ${RESERVATION_TTL:15m}
+    reservation-sweep-interval: ${RESERVATION_SWEEP_INTERVAL:60s}
+    sweep-batch-size: 200
+    sweep-enabled: true
+    stale-expiring-threshold: 1h
