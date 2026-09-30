@@ -8,7 +8,7 @@ import com.ecom.cart.proto.v1.MergeCartRequest;
 import com.ecom.platform.core.CallContext;
 import com.ecom.testing.Containers;
 import io.grpc.Server;
-import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
+import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -50,8 +50,8 @@ abstract class AbstractIT {
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry r) {
         Containers.registerPostgres(r);
-        r.add("ecom.grpc.server.port", () -> "0");
-        r.add("ecom.grpc.clients.cart.address", () -> "localhost:" + FAKE_CART.getPort());
+        r.add("spring.grpc.server.port", () -> "0");
+        r.add("spring.grpc.client.channel.cart.target", () -> "localhost:" + FAKE_CART.getPort());
         r.add("ecom.outbox.relay-enabled", () -> "false");
         r.add("ecom.auth.ephemeral-jwt-key", () -> "true");
         r.add("ecom.auth.admin-email", () -> ADMIN_EMAIL);

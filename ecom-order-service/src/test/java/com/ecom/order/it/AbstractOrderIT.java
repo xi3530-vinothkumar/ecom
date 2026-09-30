@@ -30,7 +30,7 @@ import tools.jackson.databind.ObjectMapper;
         classes = OrderServiceApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
-            "ecom.grpc.server.port=0",
+            "spring.grpc.server.port=0",
             "ecom.outbox.poll-interval=100ms",
             "ecom.order.pending-stale-refresh=1h",
             "management.tracing.export.enabled=false"
@@ -44,10 +44,10 @@ abstract class AbstractOrderIT {
     static void props(DynamicPropertyRegistry r) {
         Containers.registerPostgres(r);
         Containers.registerKafka(r);
-        r.add("ecom.grpc.clients.cart.address", () -> FakePeers.address(FakePeers.cart));
-        r.add("ecom.grpc.clients.catalog.address", () -> FakePeers.address(FakePeers.catalog));
-        r.add("ecom.grpc.clients.user.address", () -> FakePeers.address(FakePeers.user));
-        r.add("ecom.grpc.clients.payment.address", () -> FakePeers.address(FakePeers.payment));
+        r.add("spring.grpc.client.channel.cart.target", () -> FakePeers.address(FakePeers.cart));
+        r.add("spring.grpc.client.channel.catalog.target", () -> FakePeers.address(FakePeers.catalog));
+        r.add("spring.grpc.client.channel.user.target", () -> FakePeers.address(FakePeers.user));
+        r.add("spring.grpc.client.channel.payment.target", () -> FakePeers.address(FakePeers.payment));
     }
 
     @Autowired TestRestTemplate http;

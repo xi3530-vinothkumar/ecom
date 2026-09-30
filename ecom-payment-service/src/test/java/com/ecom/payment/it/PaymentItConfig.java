@@ -1,8 +1,8 @@
 package com.ecom.payment.it;
 
 import com.ecom.platform.grpc.GrpcChannels;
-import com.ecom.platform.grpc.GrpcProperties;
 import io.grpc.Channel;
+import java.util.Set;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 
@@ -17,7 +17,7 @@ public class PaymentItConfig {
     /** Routes the "order" and "inventory" clients to the in-process fakes instead of Netty. */
     @Bean
     GrpcChannels grpcChannels(FakePeers peers) {
-        return new GrpcChannels(new GrpcProperties()) {
+        return new GrpcChannels(null, Set.of()) {
             @Override
             public Channel channel(String name) {
                 return switch (name) {

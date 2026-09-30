@@ -21,7 +21,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /** Shared context for all catalog ITs (same config => one cached Spring context). */
-@SpringBootTest(properties = "ecom.grpc.server.port=0")
+@SpringBootTest(properties = "spring.grpc.server.port=0")
 @AutoConfigureMockMvc
 public abstract class CatalogIntegrationTest {
 

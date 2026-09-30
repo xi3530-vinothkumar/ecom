@@ -1,10 +1,10 @@
 spring:
   application:
     name: platform-test
-ecom:
   grpc:
     server:
       enabled: false
+ecom:
   outbox:
     poll-interval: 100ms
 management:

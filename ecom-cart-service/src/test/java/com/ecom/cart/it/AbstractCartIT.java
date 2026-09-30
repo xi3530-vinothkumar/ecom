@@ -12,7 +12,7 @@ import tools.jackson.databind.ObjectMapper;
 /** One shared context (Redis + Kafka + fake Catalog) for all cart ITs; tests isolate via unique ids/SKUs. */
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = {"ecom.grpc.server.port=0", "management.tracing.export.enabled=false"})
+        properties = {"spring.grpc.server.port=0", "management.tracing.export.enabled=false"})
 abstract class AbstractCartIT {
 
     static final FakeCatalog CATALOG = new FakeCatalog();
@@ -21,7 +21,7 @@ abstract class AbstractCartIT {
     static void containers(DynamicPropertyRegistry r) {
         Containers.registerRedis(r);
         Containers.registerKafka(r);
-        r.add("ecom.grpc.clients.catalog.address", () -> "localhost:" + CATALOG.port());
+        r.add("spring.grpc.client.channel.catalog.target", () -> "localhost:" + CATALOG.port());
     }
 
     @Autowired protected StringRedisTemplate redis;

@@ -40,7 +40,7 @@ import tools.jackson.databind.ObjectMapper;
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
-            "ecom.grpc.server.port=0",
+            "spring.grpc.server.port=0",
             "ecom.payment.psp=fake",
             "ecom.outbox.poll-interval=100ms",
             "spring.profiles.active=plain-logs"

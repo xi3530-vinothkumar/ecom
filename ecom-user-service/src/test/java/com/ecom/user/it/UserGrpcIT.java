@@ -3,7 +3,6 @@ package com.ecom.user.it;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.ecom.platform.grpc.GrpcServerLifecycle;
 import com.ecom.user.proto.v1.GetAddressRequest;
 import com.ecom.user.proto.v1.GetUserRequest;
 import com.ecom.user.proto.v1.GetUserRolesRequest;
@@ -11,13 +10,14 @@ import com.ecom.user.proto.v1.UserServiceGrpc;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
+import io.grpc.netty.NettyChannelBuilder;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.grpc.server.lifecycle.GrpcServerLifecycle;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 

@@ -15,6 +15,20 @@ spring:
       ddl-auto: validate
   flyway:
     locations: classpath:db/migration,classpath:db/platform
+  cloud:
+    circuitbreaker:
+      # run on the caller thread (no thread-pool bulkhead / time limiter): keeps CallContext/MDC
+      # and leaves timeouts to the gRPC deadlines
+      bulkhead:
+        resilience4j:
+          enabled: false
+      resilience4j:
+        disable-thread-pool: true
+        disable-time-limiter: true
+  grpc:
+    server:
+      shutdown:
+        grace-period: 15s
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
@@ -67,6 +81,11 @@ management:
   observations:
     key-values:
       service: ${spring.application.name:unknown}
+  otlp:
+    metrics:
+      export:
+        # metrics are scraped via /actuator/prometheus; OTLP is for traces only
+        enabled: false
   metrics:
     tags:
       service: ${spring.application.name:unknown}

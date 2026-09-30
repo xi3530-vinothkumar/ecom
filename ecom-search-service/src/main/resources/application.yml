@@ -16,9 +16,6 @@ management:
         readiness:
           include: readinessState,elasticsearch
 ecom:
-  grpc:
-    server:
-      enabled: false
   kafka:
     create-topics: ${KAFKA_CREATE_TOPICS:false}
   elasticsearch:

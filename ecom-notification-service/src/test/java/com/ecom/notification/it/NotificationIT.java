@@ -20,7 +20,7 @@ import com.ecom.user.proto.v1.User;
 import com.ecom.user.proto.v1.UserServiceGrpc;
 import io.grpc.Server;
 import io.grpc.Status;
-import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
+import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -73,7 +73,7 @@ class NotificationIT {
     static void props(DynamicPropertyRegistry r) {
         Containers.registerPostgres(r);
         Containers.registerKafka(r);
-        r.add("ecom.grpc.clients.user.address", () -> "localhost:" + FAKE_USER_SERVICE.getPort());
+        r.add("spring.grpc.client.channel.user.target", () -> "localhost:" + FAKE_USER_SERVICE.getPort());
     }
 
     @Autowired JdbcTemplate jdbc;
