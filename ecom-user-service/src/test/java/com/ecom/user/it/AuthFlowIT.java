@@ -9,6 +9,9 @@ import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.SignedJWT;
+import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -112,6 +115,30 @@ class AuthFlowIT extends AbstractIT {
         // other sessions (families) of the same user are unaffected
         String otherSession = refreshCookie(login(email, "correct-horse-1")).getValue();
         assertThat(withRefreshCookie("/auth/refresh", otherSession).getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void refreshCannotExtendSessionPastFamilyExpiry() {
+        String email = uniqueEmail();
+        UUID userId = register(email, "correct-horse-1");
+        String first = refreshCookie(login(email, "correct-horse-1")).getValue();
+
+        Timestamp familyEnd = jdbc.queryForObject(
+                "SELECT family_expires_at FROM refresh_tokens WHERE user_id = ?", Timestamp.class, userId);
+        assertThat(Duration.between(Instant.now(), familyEnd.toInstant())).isBetween(
+                Duration.ofDays(30).minusMinutes(1), Duration.ofDays(30));
+
+        // fast-forward: the session now ends in 60s
+        jdbc.update("UPDATE refresh_tokens SET family_expires_at = now() + interval '60 seconds',"
+                + " expires_at = now() + interval '30 seconds' WHERE user_id = ?", userId);
+
+        var rotated = withRefreshCookie("/auth/refresh", first);
+        assertThat(rotated.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(refreshCookie(rotated).getMaxAge()).isBetween(1L, 60L);
+        Integer cappedRows = jdbc.queryForObject(
+                "SELECT count(*) FROM refresh_tokens WHERE user_id = ? AND revoked_at IS NULL"
+                        + " AND expires_at = family_expires_at", Integer.class, userId);
+        assertThat(cappedRows).isEqualTo(1);
     }
 
     @Test

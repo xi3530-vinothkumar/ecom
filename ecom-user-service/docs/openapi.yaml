@@ -46,7 +46,7 @@ paths:
       operationId: login
       summary: Log in with email + password
       description: |
-        Issues an access token (JWT, 15 min) and a rotating refresh token (14 days).
+        Issues an access token (JWT, 15 min) and a rotating refresh token (14 days each, but never past the session's absolute end, 30 days after login).
         If `guestCartId` is given, the guest cart is merged into the user's cart on a best-effort
         basis (a Cart failure does not fail the login). Repeated failures lock the account
         (5 failures in 15 min → locked for 15 min); a locked account gets the same 401.
@@ -484,7 +484,7 @@ components:
         expiresIn: { type: integer, format: int64, description: Seconds until the access token expires, example: 900 }
         tokenType: { type: string, enum: [Bearer] }
         refreshToken: { type: string, description: Opaque; store in OS secure storage }
-        refreshExpiresIn: { type: integer, format: int64, description: Seconds until the refresh token expires, example: 1209600 }
+        refreshExpiresIn: { type: integer, format: int64, description: "Seconds until the refresh token expires (min of 14 d and the session's absolute end, 30 d after login)", example: 1209600 }
 
     RegisterRequest:
       type: object

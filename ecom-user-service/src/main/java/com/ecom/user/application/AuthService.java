@@ -88,7 +88,7 @@ public class AuthService {
         if (passwordEncoder.upgradeEncoding(user.getPasswordHash())) {
             user.changePasswordHash(passwordEncoder.encode(password), now);
         }
-        return tokenIssuer.mint(user, UUID.randomUUID()).tokens();
+        return tokenIssuer.startFamily(user).tokens();
     }
 
     @Transactional(noRollbackFor = EcomException.class)
@@ -103,7 +103,7 @@ public class AuthService {
             case ACTIVE -> {
                 User user = users.findById(presented.getUserId())
                         .orElseThrow(() -> EcomException.unauthenticated(INVALID_REFRESH_TOKEN));
-                TokenIssuer.Minted next = tokenIssuer.mint(user, presented.getFamilyId());
+                TokenIssuer.Minted next = tokenIssuer.continueFamily(user, presented);
                 presented.rotateTo(next.refreshToken().getId(), now);
                 yield next.tokens();
             }

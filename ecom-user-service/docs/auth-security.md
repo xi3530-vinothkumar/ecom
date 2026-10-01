@@ -38,7 +38,7 @@ so lockout, rotation, and reuse detection behave identically.
 ## 2. Refresh-token model (`refresh_tokens` table)
 
 Each row is one refresh token. Tokens are grouped into **families**: one family = one login session
-on one device. Schema: `db/migration/V1__init.sql`.
+on one device. Schema: `db/migration/V1__init.sql`, `V2__refresh_token_family_expiry.sql`.
 
 | Column | Purpose |
 |---|---|
@@ -47,7 +47,8 @@ on one device. Schema: `db/migration/V1__init.sql`.
 | `token_hash` | SHA-256 hex of the raw token. The raw token (32 random bytes, base64url) is only ever sent to the client, so a DB leak yields nothing replayable. `UNIQUE` — it is the lookup key |
 | `family_id` | Session id. New random UUID at login; every refresh keeps the same family. Logout and theft detection revoke by family (`idx_refresh_tokens_family`) |
 | `created_at` | Issue time (audit) |
-| `expires_at` | `created_at + 14d`; past this the token is EXPIRED. Used by cleanup (`idx_refresh_tokens_expires_at`) |
+| `expires_at` | `min(created_at + 14d, family_expires_at)`; past this the token is EXPIRED. Used by cleanup (`idx_refresh_tokens_expires_at`) |
+| `family_expires_at` | Absolute end of the session: `login + 30d` (`ecom.auth.session-max-lifetime`), copied unchanged into every rotated token. Refreshing can never push `expires_at` past it. Nullable only for rows written by a pre-V2 instance during a rolling deploy (treated as "start the cap now") |
 | `revoked_at` | `null` = usable. Set on rotation, logout, or family revocation |
 | `replaced_by` | `id` of the successor token. Together with `revoked_at` tells *why* the token is dead |
 
@@ -66,6 +67,8 @@ on one device. Schema: `db/migration/V1__init.sql`.
 login             → T1 {family F, active}
 refresh(T1)       → T1 {revoked_at=now, replaced_by=T2};  T2 {family F, active}
 refresh(T2)       → T2 rotated → T3 active
+…                 → each Tn expires at min(now + 14d, F.end); F.end = login + 30d never moves
+refresh at F.end  → presented token already EXPIRED → 401, user logs in again
 refresh(T1) again → T1 is ROTATED → reuse detected → revokeFamily(F) → T3 dead too → 401
 logout(T3)        → revokeFamily(F); replaced_by stays null → REVOKED
 ```
@@ -219,7 +222,7 @@ one per-IP rate-limit bucket — the split gives an attacker no extra budget.
 | # | Severity | Gap | Recommendation |
 |---|---|---|---|
 | 1 | Medium | **Lockout DoS.** Anyone knowing an email can lock that account indefinitely with 5 bad guesses every 15 min; per-IP limiting does not stop a botnet. | Key lockout per account+IP, or replace hard lock with progressive backoff / CAPTCHA after N failures; notify the user. |
-| 2 | Medium | **No absolute session lifetime.** Each refresh mints `now + 14d` (`TokenIssuer.java:38`), so a used family — including an unnoticed stolen one — lives forever. | Store an absolute family expiry (e.g. login + 30–90 d) and carry it into every rotated token; refuse refresh past it. |
+| 2 | ~~Medium~~ **Fixed** | ~~No absolute session lifetime.~~ Each refresh used to mint `now + 14d`, so a used family (including an unnoticed stolen one) lived forever. | Done: `family_expires_at` set at login (`session-max-lifetime`, default 30d), carried into every rotated token, and caps each token's `expires_at` (`TokenIssuer.continueFamily`). V2 backfills existing families with `GREATEST(login + 30d, current expiry)` so the deploy logs nobody out. |
 | 3 | Low | **Access token valid after logout.** JWT keeps working up to 15 min after logout or family revocation. | Standard stateless trade-off. If unacceptable: shorten TTL to ~5 min or add a short-lived deny-list at the Gateway. |
 | 4 | Low (UX) | **Concurrent refresh logs user out.** Two tabs refreshing the same token → second sees ROTATED → family revoked. | Grace window (~10–30 s) in which a just-rotated token returns its successor instead of triggering revocation. |
 | 5 | Low | **Timing enumeration of locked accounts.** Locked branch returns without Argon2; unknown-email branch pays one Argon2 → response time reveals "exists and is locked". | Call `passwordEncoder.matches(password, dummyHash)` on the locked branch too. |
@@ -227,9 +230,9 @@ one per-IP rate-limit bucket — the split gives an attacker no extra budget.
 | 7 | Info | **Refresh ignores account state.** Only user existence is checked. | When disable/ban or password change is added, revoke all of the user's families. |
 | 8 | Info | **Argon2 parameters** are 16 MiB / t=2, slightly below OWASP's minimum (19 MiB / t=2). | `new Argon2PasswordEncoder(16, 32, 1, 19456, 2)`; existing hashes upgrade on next login. |
 | 9 | Info | **Local Compose** sets `JWT_EPHEMERAL_KEY=true`. | Fine locally; keep it out of any shared environment (k8s base is correct). |
-| 10 | Info | **Mobile sessions have the same lifetime as browser sessions.** | When adding the absolute family expiry (#2), consider a longer cap for native clients (record client type on the family). Optional hardening: DPoP (RFC 9449) or App Attest / Play Integrity to bind tokens to the device. |
+| 10 | Info | **Mobile sessions have the same lifetime as browser sessions.** | With the absolute family expiry (#2) in place, consider a longer cap for native clients (record client type on the family). Optional hardening: DPoP (RFC 9449) or App Attest / Play Integrity to bind tokens to the device. |
 
-Suggested first fixes: **#2** and **#5** — both small and contained. #1 and #4 need a product decision.
+Suggested next fix: **#5** (small and contained). #1 and #4 need a product decision.
 
 ---
 
@@ -238,7 +241,8 @@ Suggested first fixes: **#2** and **#5** — both small and contained. #1 and #4
 | Property | Env var | Default | Notes |
 |---|---|---|---|
 | `ecom.jwt.access-token-ttl` | — | `15m` | Access JWT lifetime |
-| `ecom.auth.refresh-token-ttl` | — | `14d` | Sliding; see gap #2 |
+| `ecom.auth.refresh-token-ttl` | — | `14d` | Per token; capped at the family's absolute end |
+| `ecom.auth.session-max-lifetime` | `SESSION_MAX_LIFETIME` | `30d` | Absolute session lifetime from login (gap #2) |
 | `ecom.auth.refresh-cookie-name` | — | `refresh_token` | |
 | `ecom.auth.refresh-cookie-path` | — | `/auth` | |
 | `ecom.auth.lockout.max-failures` | — | `5` | |
