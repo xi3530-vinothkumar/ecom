@@ -6,6 +6,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -31,8 +32,13 @@ import org.springframework.kafka.support.ExponentialBackOffWithMaxRetries;
 @EnableConfigurationProperties(OutboxProperties.class)
 public class KafkaPlatformAutoConfiguration {
 
-    /** Retry 1s / 5s / 15s, then dead-letter to {@code <topic>.dlt} on the same partition. */
+    /**
+     * Retry 1s / 5s / 15s, then dead-letter to {@code <topic>.dlt} on the same partition. Needs a
+     * {@link KafkaTemplate}: spring-kafka can be on the classpath transitively (e.g. the Gateway) without
+     * Boot's Kafka auto-configuration creating one.
+     */
     @Bean
+    @ConditionalOnBean(KafkaTemplate.class)
     @ConditionalOnMissingBean(CommonErrorHandler.class)
     DefaultErrorHandler kafkaErrorHandler(KafkaTemplate<Object, Object> template) {
         var recoverer = new DeadLetterPublishingRecoverer(

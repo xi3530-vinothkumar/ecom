@@ -157,7 +157,7 @@ class CartApiIT extends AbstractCartIT {
         assertThat(put(h, a, Map.of()).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(put(h, sku("UNKNOWN"), Map.of("quantity", 1)).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(put(h, inactive, Map.of("quantity", 1)).getStatusCode())
-                .isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+                .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(put(h, a, Map.of("quantity", 99)).getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 }

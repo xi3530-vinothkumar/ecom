@@ -77,7 +77,7 @@ class AdminInventoryApiIT extends AbstractInventoryIT {
 
         ResponseEntity<JsonNode> res = put(s, Map.of("onHand", 3), "ADMIN");
 
-        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(level(s).onHand()).isEqualTo(5);
         assertThat(put(s, Map.of("onHand", 4), "ADMIN").getBody().path("available").asInt()).isZero();
     }
