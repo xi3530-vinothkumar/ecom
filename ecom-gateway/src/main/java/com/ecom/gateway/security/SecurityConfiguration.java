@@ -69,7 +69,8 @@ public class SecurityConfiguration {
                             .pathMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus")
                             .permitAll()
                             .pathMatchers(HttpMethod.GET, "/products/**", "/categories/**", "/search/**").permitAll()
-                            .pathMatchers(HttpMethod.POST, "/auth/login", "/auth/refresh", "/auth/logout", "/users",
+                            .pathMatchers(HttpMethod.POST, "/auth/login", "/auth/refresh", "/auth/logout",
+                                    "/auth/mobile/login", "/auth/mobile/refresh", "/auth/mobile/logout", "/users",
                                     "/webhooks/psp")
                             .permitAll()
                             // guest carts; a valid bearer token is still authenticated and propagated

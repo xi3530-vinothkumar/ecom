@@ -51,10 +51,12 @@ public class GatewayRouteConfig {
         GatewayProperties.Backends b = props.backends();
         var routes = builder.routes()
                 // user
-                .route("user-login", r -> r.method(HttpMethod.POST).and().path("/auth/login")
+                // browser and mobile logins share one per-IP bucket, so the split adds no budget
+                .route("user-login", r -> r.method(HttpMethod.POST).and().path("/auth/login", "/auth/mobile/login")
                         .filters(f -> f.requestRateLimiter(c -> c.setRateLimiter(loginLimiter).setKeyResolver(ip)))
                         .uri(b.user()))
-                .route("user-auth", r -> r.method(HttpMethod.POST).and().path("/auth/refresh", "/auth/logout")
+                .route("user-auth", r -> r.method(HttpMethod.POST).and()
+                        .path("/auth/refresh", "/auth/logout", "/auth/mobile/refresh", "/auth/mobile/logout")
                         .filters(this::defaultLimit).uri(b.user()))
                 .route("user-register", r -> r.method(HttpMethod.POST).and().path("/users")
                         .filters(this::defaultLimit).uri(b.user()))

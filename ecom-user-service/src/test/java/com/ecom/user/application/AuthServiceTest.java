@@ -41,7 +41,7 @@ class AuthServiceTest {
     private final TokenIssuer tokenIssuer = mock(TokenIssuer.class);
     private final PasswordEncoder encoder = mock(PasswordEncoder.class);
     private final AuthProperties props = new AuthProperties(
-            false, Duration.ofDays(14), false, "refresh_token", "/auth", null, null,
+            false, Duration.ofDays(14), "refresh_token", "/auth", null, null,
             new AuthProperties.Lockout(5, Duration.ofMinutes(15), Duration.ofMinutes(15)));
 
     private AuthService service;

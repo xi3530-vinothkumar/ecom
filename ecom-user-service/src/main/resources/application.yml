@@ -31,7 +31,6 @@ ecom:
   auth:
     ephemeral-jwt-key: ${JWT_EPHEMERAL_KEY:false}
     refresh-token-ttl: 14d
-    refresh-token-in-body: ${REFRESH_TOKEN_IN_BODY:false}
     admin-email: ${ADMIN_EMAIL:}
     admin-password: ${ADMIN_PASSWORD:}
     lockout:
