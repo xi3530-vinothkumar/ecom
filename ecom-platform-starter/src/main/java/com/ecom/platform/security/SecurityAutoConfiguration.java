@@ -10,7 +10,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 
 @AutoConfiguration
-@ConditionalOnClass(name = "com.nimbusds.jose.crypto.RSASSASigner")
+@ConditionalOnClass(name = "org.springframework.security.oauth2.jwt.NimbusJwtEncoder")
 @EnableConfigurationProperties(JwtProperties.class)
 public class SecurityAutoConfiguration {
 

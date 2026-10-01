@@ -12,6 +12,10 @@ import java.util.UUID;
  * One link in a refresh-token family. A family starts at login; every refresh rotates the
  * presented token (revoked + replaced_by) and appends a new one. Presenting a token that was
  * already rotated means two parties hold the family, so the whole family is revoked.
+ *
+ * <p>{@code familyExpiresAt} is the family's absolute end, fixed at login and copied into every
+ * successor; each token's {@code expiresAt} never exceeds it, so refreshing cannot extend a session
+ * forever.
  */
 @Entity
 @Table(name = "refresh_tokens")
@@ -43,6 +47,10 @@ public class RefreshToken {
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
+    /** Null only for rows written by an instance predating V2 during a rolling deploy. */
+    @Column(name = "family_expires_at")
+    private Instant familyExpiresAt;
+
     @Column(name = "revoked_at")
     private Instant revokedAt;
 
@@ -51,13 +59,19 @@ public class RefreshToken {
 
     protected RefreshToken() {}
 
-    public RefreshToken(UUID id, UUID userId, String tokenHash, UUID familyId, Instant createdAt, Instant expiresAt) {
+    public RefreshToken(
+            UUID id, UUID userId, String tokenHash, UUID familyId, Instant createdAt, Instant expiresAt,
+            Instant familyExpiresAt) {
         this.id = Objects.requireNonNull(id);
         this.userId = Objects.requireNonNull(userId);
         this.tokenHash = Objects.requireNonNull(tokenHash);
         this.familyId = Objects.requireNonNull(familyId);
         this.createdAt = Objects.requireNonNull(createdAt);
         this.expiresAt = Objects.requireNonNull(expiresAt);
+        this.familyExpiresAt = Objects.requireNonNull(familyExpiresAt);
+        if (expiresAt.isAfter(familyExpiresAt)) {
+            throw new IllegalArgumentException("Refresh token cannot outlive its family");
+        }
     }
 
     public Status statusAt(Instant now) {
@@ -94,6 +108,10 @@ public class RefreshToken {
 
     public Instant getExpiresAt() {
         return expiresAt;
+    }
+
+    public Instant getFamilyExpiresAt() {
+        return familyExpiresAt;
     }
 
     public Instant getRevokedAt() {

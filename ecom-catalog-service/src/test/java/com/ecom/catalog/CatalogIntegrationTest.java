@@ -1,35 +1,29 @@
 package com.ecom.catalog;
 
+import com.ecom.testing.ContainerConfigs;
+import org.springframework.context.annotation.Import;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ecom.platform.core.CallContext;
-import com.ecom.testing.Containers;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /** Shared context for all catalog ITs (same config => one cached Spring context). */
-@SpringBootTest(properties = "ecom.grpc.server.port=0")
+@Import({ContainerConfigs.Postgres.class, ContainerConfigs.Kafka.class})
+@SpringBootTest(properties = "spring.grpc.server.port=0")
 @AutoConfigureMockMvc
 public abstract class CatalogIntegrationTest {
-
-    @DynamicPropertySource
-    static void containers(DynamicPropertyRegistry r) {
-        Containers.registerPostgres(r);
-        Containers.registerKafka(r);
-    }
 
     @Autowired protected MockMvc mvc;
     @Autowired protected ObjectMapper mapper;
@@ -57,7 +51,7 @@ public abstract class CatalogIntegrationTest {
     protected String createCategory(String name) throws Exception {
         var res = mvc.perform(asAdmin(json(post("/admin/categories"), Map.of("name", name))))
                 .andExpect(status().isCreated());
-        return read(res).path("id").asText();
+        return read(res).path("id").asString();
     }
 
     protected static String sku() {
@@ -77,7 +71,7 @@ public abstract class CatalogIntegrationTest {
     protected String createProduct(String categoryId, List<Map<String, Object>> variants) throws Exception {
         var res = mvc.perform(asAdmin(json(post("/admin/products"), product("Prod " + UUID.randomUUID(), categoryId, variants))))
                 .andExpect(status().isCreated());
-        return read(res).path("id").asText();
+        return read(res).path("id").asString();
     }
 
     /** Outbox rows for one product, oldest first, as parsed envelopes. */

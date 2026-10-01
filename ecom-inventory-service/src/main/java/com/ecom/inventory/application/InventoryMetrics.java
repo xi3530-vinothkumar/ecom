@@ -33,7 +33,7 @@ public class InventoryMetrics {
                     try {
                         return reservations.countOrdersExpiringSince(
                                 clock.instant().minus(props.staleExpiringThreshold()));
-                    } catch (RuntimeException e) {
+                    } catch (RuntimeException _) {
                         return Double.NaN;
                     }
                 })

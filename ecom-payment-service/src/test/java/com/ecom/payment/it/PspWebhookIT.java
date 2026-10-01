@@ -45,7 +45,7 @@ class PspWebhookIT extends PaymentIntegrationTestBase {
         assertThat(response.getBody()).contains("PROCESSED");
         PaymentTransaction tx = awaitStatus(orderId, TransactionStatus.AUTHORIZED);
         assertThat(tx.clientSecret()).isNull();
-        assertThat(awaitPublished(EventTopics.PAYMENT_AUTHORIZED, orderId).path("transactionId").asText())
+        assertThat(awaitPublished(EventTopics.PAYMENT_AUTHORIZED, orderId).path("transactionId").asString())
                 .isEqualTo(tx.id().toString());
         assertThat(completeAction(pending.pspReference(), "succeeded").getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
     }
@@ -59,7 +59,7 @@ class PspWebhookIT extends PaymentIntegrationTestBase {
 
         PaymentTransaction tx = awaitStatus(orderId, TransactionStatus.FAILED);
         assertThat(tx.failureReason()).isEqualTo(FakePspClient.AUTHENTICATION_FAILED);
-        assertThat(awaitPublished(EventTopics.PAYMENT_FAILED, orderId).path("reason").asText())
+        assertThat(awaitPublished(EventTopics.PAYMENT_FAILED, orderId).path("reason").asString())
                 .isEqualTo(FakePspClient.AUTHENTICATION_FAILED);
         assertThat(outboxCount(EventTopics.PAYMENT_AUTHORIZED, orderId)).isZero();
     }
@@ -75,7 +75,7 @@ class PspWebhookIT extends PaymentIntegrationTestBase {
         var response = postWebhook(lateEvent, signer.sign(lateEvent));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(awaitPublished(EventTopics.PAYMENT_VOIDED, orderId).path("transactionId").asText())
+        assertThat(awaitPublished(EventTopics.PAYMENT_VOIDED, orderId).path("transactionId").asString())
                 .isEqualTo(voided.id().toString());
         assertThat(transaction(orderId).orElseThrow().status()).isEqualTo(TransactionStatus.VOIDED);
         assertThat(outboxCount(EventTopics.PAYMENT_AUTHORIZED, orderId)).isZero();
@@ -97,7 +97,7 @@ class PspWebhookIT extends PaymentIntegrationTestBase {
         assertThat(tx.clientSecret()).isNull();
         assertThat(psp.cancelCalls(pending.pspReference())).isEqualTo(1);
         assertThat(psp.intent(pending.pspReference()).orElseThrow().status()).isEqualTo(FakePspClient.STATUS_CANCELED);
-        assertThat(awaitPublished(EventTopics.PAYMENT_VOIDED, orderId).path("transactionId").asText())
+        assertThat(awaitPublished(EventTopics.PAYMENT_VOIDED, orderId).path("transactionId").asString())
                 .isEqualTo(tx.id().toString());
         assertThat(outboxCount(EventTopics.PAYMENT_AUTHORIZED, orderId)).isZero();
     }

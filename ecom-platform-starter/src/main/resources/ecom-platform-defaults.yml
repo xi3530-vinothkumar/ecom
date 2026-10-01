@@ -2,11 +2,16 @@
 server:
   shutdown: graceful
 spring:
+  threads:
+    virtual:
+      # Tomcat, @Scheduled, Kafka listener containers and the gRPC server (see GrpcAutoConfiguration)
+      enabled: true
   lifecycle:
     timeout-per-shutdown-phase: 20s
   jackson:
     deserialization:
       fail-on-unknown-properties: false   # additive-only event/DTO evolution
+      fail-on-null-for-primitives: false  # Jackson 3 flipped this default; keep Jackson 2 behaviour
     default-property-inclusion: non_null
   jpa:
     open-in-view: false
@@ -14,6 +19,20 @@ spring:
       ddl-auto: validate
   flyway:
     locations: classpath:db/migration,classpath:db/platform
+  cloud:
+    circuitbreaker:
+      # run on the caller thread (no thread-pool bulkhead / time limiter): keeps CallContext/MDC
+      # and leaves timeouts to the gRPC deadlines
+      bulkhead:
+        resilience4j:
+          enabled: false
+      resilience4j:
+        disable-thread-pool: true
+        disable-time-limiter: true
+  grpc:
+    server:
+      shutdown:
+        grace-period: 15s
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
@@ -32,6 +51,12 @@ spring:
     template:
       # outbox relay sets traceparent itself (captured at write time) - do not overwrite it
       observation-enabled: false
+logging:
+  structured:
+    json:
+      add:
+        service: ${spring.application.name:unknown}
+      customizer: com.ecom.platform.observability.PiiMaskingJsonMembersCustomizer
 management:
   endpoints:
     web:
@@ -54,15 +79,23 @@ management:
     readinessstate:
       enabled: true
   tracing:
-    enabled: ${TRACING_ENABLED:true}
+    export:
+      enabled: ${TRACING_ENABLED:true}
     sampling:
       probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
-  otlp:
+  opentelemetry:
     tracing:
-      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/traces
+      export:
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/traces
   observations:
     key-values:
       service: ${spring.application.name:unknown}
+  otlp:
+    metrics:
+      export:
+        # metrics are scraped via /actuator/prometheus; OTLP is for traces only
+        enabled: false
   metrics:
     tags:
       service: ${spring.application.name:unknown}

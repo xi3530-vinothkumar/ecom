@@ -3,12 +3,12 @@ package com.ecom.platform.kafka;
 import com.ecom.common.events.EventEnvelope;
 import com.ecom.platform.core.CallContext;
 import com.ecom.platform.core.CorrelationIds;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.function.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Template method every {@code @KafkaListener} routes through:
@@ -39,8 +39,8 @@ public class IdempotentConsumer {
 
     public void handle(ConsumerRecord<String, String> record, String consumer, Consumer<EventEnvelope> handler) {
         EventEnvelope envelope = EventEnvelope.parse(mapper, record.value());
-        CallContext.set(new CallContext(CorrelationIds.acceptOrGenerate(envelope.correlationId()), null, null));
-        try {
+        var ctx = new CallContext(CorrelationIds.acceptOrGenerate(envelope.correlationId()), null, null);
+        CallContext.run(ctx, () -> {
             Runnable work = () -> {
                 if (store.markProcessed(envelope.eventId(), consumer)) {
                     handler.accept(envelope);
@@ -59,9 +59,7 @@ public class IdempotentConsumer {
                     throw e;
                 }
             }
-        } finally {
-            CallContext.clear();
-        }
+        });
     }
 
     public ObjectMapper mapper() {

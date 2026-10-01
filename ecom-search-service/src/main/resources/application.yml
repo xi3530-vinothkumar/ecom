@@ -1,6 +1,12 @@
 spring:
   application:
     name: search-service
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URL:http://localhost:9200}
+    connection-timeout: 5s
+    socket-timeout: 30s
+    # api-key: unset locally / in Compose (security disabled); in AWS envs SPRING_ELASTICSEARCH_API_KEY
+    # (Elastic Cloud API key, base64 id:key) comes from the search-service-secrets ExternalSecret
   kafka:
     consumer:
       properties:
@@ -16,15 +22,8 @@ management:
         readiness:
           include: readinessState,elasticsearch
 ecom:
-  grpc:
-    server:
-      enabled: false
   kafka:
     create-topics: ${KAFKA_CREATE_TOPICS:false}
-  elasticsearch:
-    url: ${ELASTICSEARCH_URL:http://localhost:9200}
-    # blank locally / in Compose (security disabled); Elastic Cloud API key (base64 id:key) in AWS envs
-    api-key: ${ELASTICSEARCH_API_KEY:}
   search:
     index: products
     orphan-ttl: 24h

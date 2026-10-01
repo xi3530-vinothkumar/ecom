@@ -61,7 +61,7 @@ public class CategoryService {
     private Category saveUnique(Category category, String name) {
         try {
             return categories.saveAndFlush(category);
-        } catch (DataIntegrityViolationException e) {
+        } catch (DataIntegrityViolationException _) {
             throw EcomException.conflict("A category named '" + name.strip() + "' already exists under this parent");
         }
     }

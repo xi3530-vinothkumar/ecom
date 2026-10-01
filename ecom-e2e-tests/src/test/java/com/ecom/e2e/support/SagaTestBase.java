@@ -3,7 +3,6 @@ package com.ecom.e2e.support;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
@@ -11,6 +10,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Shared base for all saga scenarios: one started {@link EcomSystem} per JVM, plus helpers that set up
@@ -74,7 +74,7 @@ public abstract class SagaTestBase {
         await("order " + orderId + " -> " + status).atMost(SETTLE).pollInterval(Duration.ofMillis(250))
                 .untilAsserted(() -> {
                     last.set(api.order(s.userId(), orderId));
-                    assertThat(last.get().path("status").asText()).as("order %s", last.get()).isEqualTo(status);
+                    assertThat(last.get().path("status").asString()).as("order %s", last.get()).isEqualTo(status);
                 });
         return last.get();
     }
@@ -84,7 +84,7 @@ public abstract class SagaTestBase {
         await("order " + orderId + " terminal").atMost(SETTLE).pollInterval(Duration.ofMillis(250))
                 .untilAsserted(() -> {
                     last.set(api.order(s.userId(), orderId));
-                    assertThat(last.get().path("status").asText()).isNotEqualTo("PENDING");
+                    assertThat(last.get().path("status").asString()).isNotEqualTo("PENDING");
                 });
         return last.get();
     }

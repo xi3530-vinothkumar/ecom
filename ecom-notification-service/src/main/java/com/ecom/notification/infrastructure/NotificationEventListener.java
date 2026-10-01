@@ -6,10 +6,10 @@ import com.ecom.common.events.payload.OrderConfirmedPayload;
 import com.ecom.common.events.payload.UserRegisteredPayload;
 import com.ecom.notification.application.NotificationEventHandler;
 import com.ecom.platform.kafka.IdempotentConsumer;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
 
 @Component
 public class NotificationEventListener {

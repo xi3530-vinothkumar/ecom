@@ -26,7 +26,7 @@ class HappyPathIT extends SagaTestBase {
         var order = awaitStatus(s, orderId, "CONFIRMED");
         assertThat(order.path("cancelReason").isMissingNode() || order.path("cancelReason").isNull()).isTrue();
         // 2*19.99 + 5.00 = 44.98; VAT 21% = 9.4458 -> 9.45; shipping 4.95
-        assertThat(order.path("subtotal").path("amount").asText()).isEqualTo("44.98");
+        assertThat(order.path("subtotal").path("amount").asString()).isEqualTo("44.98");
         assertThat(order.path("lines")).hasSize(2);
 
         awaitReservations(orderId, "COMMITTED");

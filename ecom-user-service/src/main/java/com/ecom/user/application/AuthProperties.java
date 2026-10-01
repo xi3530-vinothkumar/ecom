@@ -9,8 +9,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record AuthProperties(
         @DefaultValue("false") boolean ephemeralJwtKey,
         @DefaultValue("14d") Duration refreshTokenTtl,
-        /** Also return the refresh token in the JSON body (non-browser clients); cookie is always set. */
-        @DefaultValue("false") boolean refreshTokenInBody,
+        /** Absolute session (family) lifetime from login; refreshing never extends past it. */
+        @DefaultValue("30d") Duration sessionMaxLifetime,
         @DefaultValue("refresh_token") String refreshCookieName,
         @DefaultValue("/auth") String refreshCookiePath,
         String adminEmail,

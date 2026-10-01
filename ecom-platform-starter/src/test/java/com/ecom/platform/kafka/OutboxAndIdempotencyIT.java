@@ -1,5 +1,7 @@
 package com.ecom.platform.kafka;
 
+import com.ecom.testing.ContainerConfigs;
+import org.springframework.context.annotation.Import;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -9,7 +11,6 @@ import com.ecom.common.events.payload.UserRegisteredPayload;
 import com.ecom.platform.TestApp;
 import com.ecom.testing.Containers;
 import com.ecom.testing.KafkaTestSupport;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
@@ -19,18 +20,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.ObjectMapper;
 
+@Import({ContainerConfigs.Postgres.class, ContainerConfigs.Kafka.class})
 @SpringBootTest(classes = TestApp.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 class OutboxAndIdempotencyIT {
-
-    @DynamicPropertySource
-    static void props(DynamicPropertyRegistry r) {
-        Containers.registerPostgres(r);
-        Containers.registerKafka(r);
-    }
 
     @Autowired OutboxWriter outbox;
     @Autowired IdempotentConsumer consumer;
@@ -45,7 +40,7 @@ class OutboxAndIdempotencyIT {
 
         List<EventEnvelope> got = KafkaTestSupport.await(
                 Containers.kafka().getBootstrapServers(), mapper, EventTopics.USER_REGISTERED,
-                e -> userId.equals(e.payload().path("userId").asText()), Duration.ofSeconds(20));
+                e -> userId.equals(e.payload().path("userId").asString()), Duration.ofSeconds(20));
 
         assertThat(got).hasSize(1);
         assertThat(got.getFirst().producerService()).isEqualTo("platform-test");

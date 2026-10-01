@@ -19,7 +19,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * The whole saga under test, started once per JVM: Testcontainers Postgres (one database per service),
@@ -52,7 +52,7 @@ public final class EcomSystem {
     private final Map<String, ServiceProcess> processes = new LinkedHashMap<>();
     private final Path repoRoot;
     private final Path logDir;
-    private PostgreSQLContainer<?> postgres;
+    private PostgreSQLContainer postgres;
     private String kafkaBootstrap;
     private EventLog eventLog;
     private volatile boolean stopped;

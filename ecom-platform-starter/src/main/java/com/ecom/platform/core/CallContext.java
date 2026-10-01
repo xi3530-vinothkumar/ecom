@@ -5,9 +5,12 @@ import java.util.Set;
 import org.slf4j.MDC;
 
 /**
- * Per-call identity + correlation, populated by the web filter (from Gateway-stamped headers),
- * the gRPC server interceptor (from metadata) or the Kafka consumer (from the envelope), and
- * re-emitted by the gRPC client interceptor. Also mirrored into the logging MDC.
+ * Per-call identity + correlation, bound for the duration of a request by the web filter (from
+ * Gateway-stamped headers), the gRPC server interceptor (from metadata) or the Kafka consumer (from
+ * the envelope), and re-emitted by the gRPC client interceptor. Held in a {@link ScopedValue}, so it
+ * is immutable within a scope, cheap on virtual threads and never leaks past the call; nested
+ * {@link #run}/{@link #call} rebind it and restore the outer value on exit. Also mirrored into the
+ * logging MDC for the same scope.
  */
 public record CallContext(String correlationId, String userId, Set<String> roles) {
 
@@ -18,30 +21,48 @@ public record CallContext(String correlationId, String userId, Set<String> roles
     public static final String MDC_USER_ID = "userId";
     public static final String ROLE_ADMIN = "ADMIN";
 
-    private static final ThreadLocal<CallContext> CURRENT = new ThreadLocal<>();
+    private static final ScopedValue<CallContext> CURRENT = ScopedValue.newInstance();
 
     public CallContext {
         roles = roles == null ? Set.of() : Set.copyOf(roles);
     }
 
     public static Optional<CallContext> current() {
-        return Optional.ofNullable(CURRENT.get());
+        return CURRENT.isBound() ? Optional.of(CURRENT.get()) : Optional.empty();
     }
 
-    public static void set(CallContext ctx) {
-        CURRENT.set(ctx);
-        if (ctx.correlationId() != null) {
-            MDC.put(MDC_CORRELATION_ID, ctx.correlationId());
-        }
-        if (ctx.userId() != null) {
-            MDC.put(MDC_USER_ID, ctx.userId());
+    /** Runs {@code op} with {@code ctx} as the current context. */
+    public static void run(CallContext ctx, Runnable op) {
+        call(ctx, () -> {
+            op.run();
+            return null;
+        });
+    }
+
+    /** Calls {@code op} with {@code ctx} as the current context, propagating its result and exception. */
+    public static <R, X extends Throwable> R call(CallContext ctx, ScopedValue.CallableOp<? extends R, X> op) throws X {
+        return ScopedValue.where(CURRENT, ctx).call(() -> withMdc(ctx, op));
+    }
+
+    private static <R, X extends Throwable> R withMdc(CallContext ctx, ScopedValue.CallableOp<? extends R, X> op) throws X {
+        String outerCorrelationId = MDC.get(MDC_CORRELATION_ID);
+        String outerUserId = MDC.get(MDC_USER_ID);
+        putOrRemove(MDC_CORRELATION_ID, ctx.correlationId());
+        putOrRemove(MDC_USER_ID, ctx.userId());
+        try {
+            return op.call();
+        } finally {
+            putOrRemove(MDC_CORRELATION_ID, outerCorrelationId);
+            putOrRemove(MDC_USER_ID, outerUserId);
         }
     }
 
-    public static void clear() {
-        CURRENT.remove();
-        MDC.remove(MDC_CORRELATION_ID);
-        MDC.remove(MDC_USER_ID);
+    private static void putOrRemove(String key, String value) {
+        if (value == null) {
+            MDC.remove(key);
+        } else {
+            MDC.put(key, value);
+        }
     }
 
     public static String correlationIdOrNull() {

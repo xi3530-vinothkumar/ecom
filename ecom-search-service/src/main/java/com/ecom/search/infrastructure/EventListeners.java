@@ -8,13 +8,13 @@ import com.ecom.common.events.payload.StockLevelChangedPayload;
 import com.ecom.platform.core.CallContext;
 import com.ecom.platform.core.CorrelationIds;
 import com.ecom.search.application.IndexingService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.function.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Two independent consumer groups so a slow inventory stream never delays catalog indexing.
@@ -58,11 +58,7 @@ public class EventListeners {
 
     private void handle(ConsumerRecord<String, String> rec, Consumer<EventEnvelope> handler) {
         EventEnvelope env = EventEnvelope.parse(mapper, rec.value());
-        CallContext.set(new CallContext(CorrelationIds.acceptOrGenerate(env.correlationId()), null, null));
-        try {
-            handler.accept(env);
-        } finally {
-            CallContext.clear();
-        }
+        CallContext.run(new CallContext(CorrelationIds.acceptOrGenerate(env.correlationId()), null, null),
+                () -> handler.accept(env));
     }
 }

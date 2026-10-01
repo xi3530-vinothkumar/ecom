@@ -10,7 +10,7 @@ final class CurrentUser {
         String raw = CallContext.requireUserId();
         try {
             return UUID.fromString(raw);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             throw EcomException.unauthenticated("Authentication required");
         }
     }

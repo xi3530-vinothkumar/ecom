@@ -27,11 +27,11 @@ class KafkaSagaIT extends AbstractInventoryIT {
                 new OrderCreatedPayload(orderId, "user-k", lines(a, 2)));
 
         var reserved = KafkaTestSupport.await(bootstrap, mapper, EventTopics.INVENTORY_RESERVED,
-                e -> orderId.equals(e.payload().path("orderId").asText()), Duration.ofSeconds(30));
+                e -> orderId.equals(e.payload().path("orderId").asString()), Duration.ofSeconds(30));
         assertThat(reserved).hasSize(1);
         assertThat(reserved.getFirst().producerService()).isEqualTo("inventory-service");
         var stockChanged = KafkaTestSupport.await(bootstrap, mapper, EventTopics.STOCK_LEVEL_CHANGED,
-                e -> a.equals(e.payload().path("sku").asText()), Duration.ofSeconds(30));
+                e -> a.equals(e.payload().path("sku").asString()), Duration.ofSeconds(30));
         assertThat(stockChanged.getFirst().payload().path("availableQty").asInt()).isEqualTo(1);
 
         KafkaTestSupport.sendPayload(bootstrap, mapper, EventTopics.ORDER_CONFIRMED, orderId,

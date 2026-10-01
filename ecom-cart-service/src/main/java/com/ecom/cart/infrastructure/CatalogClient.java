@@ -1,6 +1,6 @@
 package com.ecom.cart.infrastructure;
 
-import com.ecom.cart.config.CartProperties;
+import com.ecom.cart.config.CacheConfiguration;
 import com.ecom.cart.domain.Product;
 import com.ecom.catalog.proto.v1.CatalogServiceGrpc;
 import com.ecom.catalog.proto.v1.GetProductsBatchRequest;
@@ -9,21 +9,23 @@ import com.ecom.catalog.proto.v1.ProductItem;
 import com.ecom.platform.core.MoneyMapper;
 import com.ecom.platform.grpc.GrpcChannels;
 import com.ecom.platform.grpc.ResilientCalls;
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Component;
 
 /**
- * Catalog lookups for display hydration, behind a short-lived Caffeine L1. Unknown SKUs are cached as
- * absent too, so a cart full of deleted products does not hammer Catalog. Display-only: checkout
- * re-prices against Catalog directly.
+ * Catalog lookups for display hydration, behind a short-lived Spring Cache (Caffeine) L1; misses are
+ * fetched in one batch call. Unknown SKUs are cached as absent (null) too, so a cart full of deleted
+ * products does not hammer Catalog. Display-only: checkout re-prices against Catalog directly.
  */
 @Component
 public class CatalogClient {
@@ -32,15 +34,12 @@ public class CatalogClient {
 
     private final CatalogServiceGrpc.CatalogServiceBlockingStub stub;
     private final ResilientCalls calls;
-    private final Cache<String, Optional<Product>> cache;
+    private final Cache cache;
 
-    public CatalogClient(GrpcChannels channels, ResilientCalls calls, CartProperties props) {
+    public CatalogClient(GrpcChannels channels, ResilientCalls calls, CacheManager caches) {
         this.stub = CatalogServiceGrpc.newBlockingStub(channels.channel(CATALOG));
         this.calls = calls;
-        this.cache = Caffeine.newBuilder()
-                .expireAfterWrite(props.catalogCache().ttl())
-                .maximumSize(props.catalogCache().maxSize())
-                .build();
+        this.cache = Objects.requireNonNull(caches.getCache(CacheConfiguration.CATALOG_PRODUCTS));
     }
 
     /** Known SKUs only (active or not); unknown SKUs are absent from the result. */
@@ -48,9 +47,21 @@ public class CatalogClient {
         if (skus.isEmpty()) {
             return Map.of();
         }
-        Map<String, Optional<Product>> found = cache.getAll(Set.copyOf(skus), this::load);
         Map<String, Product> out = new LinkedHashMap<>();
-        found.forEach((sku, product) -> product.ifPresent(p -> out.put(sku, p)));
+        Set<String> missing = new LinkedHashSet<>();
+        for (String sku : Set.copyOf(skus)) {
+            switch (cache.get(sku)) {
+                case null -> missing.add(sku);
+                case Cache.ValueWrapper hit when hit.get() instanceof Product p -> out.put(sku, p);
+                case Cache.ValueWrapper _ -> { } // cached as unknown
+            }
+        }
+        if (!missing.isEmpty()) {
+            load(missing).forEach((sku, product) -> {
+                cache.put(sku, product.orElse(null));
+                product.ifPresent(p -> out.put(sku, p));
+            });
+        }
         return out;
     }
 
@@ -58,7 +69,7 @@ public class CatalogClient {
         return Optional.ofNullable(products(Set.of(sku)).get(sku));
     }
 
-    private Map<String, Optional<Product>> load(Set<? extends String> missing) {
+    private Map<String, Optional<Product>> load(Set<String> missing) {
         List<String> skus = List.copyOf(missing);
         GetProductsBatchResponse response = calls.call(CATALOG, () -> stub.getProductsBatch(
                 GetProductsBatchRequest.newBuilder().addAllSkus(skus).build()));

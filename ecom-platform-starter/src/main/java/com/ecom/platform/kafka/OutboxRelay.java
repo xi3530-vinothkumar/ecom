@@ -58,7 +58,7 @@ public class OutboxRelay {
             Integer sent;
             do {
                 sent = tx.execute(status -> publishBatch());
-            } while (sent != null && sent == props.getBatchSize());
+            } while (sent != null && sent == props.batchSize());
         } catch (RuntimeException e) {
             failures.increment();
             log.warn("Outbox relay batch failed; will retry next poll: {}", e.toString());
@@ -68,10 +68,11 @@ public class OutboxRelay {
     /** Publishes one batch; returns the number of rows published. Visible for tests. */
     public int publishBatch() {
         List<Row> rows = jdbc.query(
-                "SELECT id, topic, message_key, payload, traceparent FROM outbox WHERE published_at IS NULL "
-                        + "ORDER BY id LIMIT ? FOR UPDATE SKIP LOCKED",
+                """
+                SELECT id, topic, message_key, payload, traceparent FROM outbox WHERE published_at IS NULL
+                ORDER BY id LIMIT ? FOR UPDATE SKIP LOCKED""",
                 (rs, i) -> new Row(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5)),
-                props.getBatchSize());
+                props.batchSize());
         if (rows.isEmpty()) {
             return 0;
         }
@@ -85,7 +86,7 @@ public class OutboxRelay {
         }
         try {
             CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
-                    .get(props.getSendTimeout().toMillis(), TimeUnit.MILLISECONDS);
+                    .get(props.sendTimeout().toMillis(), TimeUnit.MILLISECONDS);
         } catch (Exception e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
@@ -100,8 +101,8 @@ public class OutboxRelay {
 
     @Scheduled(cron = "${ecom.outbox.cleanup-cron:0 17 * * * *}")
     public void cleanup() {
-        Timestamp outboxCutoff = Timestamp.from(Instant.now().minus(props.getPublishedRetention()));
-        Timestamp dedupCutoff = Timestamp.from(Instant.now().minus(props.getProcessedEventsRetention()));
+        Timestamp outboxCutoff = Timestamp.from(Instant.now().minus(props.publishedRetention()));
+        Timestamp dedupCutoff = Timestamp.from(Instant.now().minus(props.processedEventsRetention()));
         int o = jdbc.update("DELETE FROM outbox WHERE published_at IS NOT NULL AND published_at < ?", outboxCutoff);
         int p = jdbc.update("DELETE FROM processed_events WHERE processed_at < ?", dedupCutoff);
         log.info("Outbox cleanup removed {} published rows and {} processed_events rows", o, p);
@@ -111,7 +112,7 @@ public class OutboxRelay {
         try {
             Long n = jdbc.queryForObject("SELECT count(*) FROM outbox WHERE published_at IS NULL", Long.class);
             return n == null ? 0 : n;
-        } catch (RuntimeException e) {
+        } catch (RuntimeException _) {
             return Double.NaN;
         }
     }

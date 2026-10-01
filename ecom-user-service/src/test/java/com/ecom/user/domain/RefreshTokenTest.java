@@ -13,7 +13,8 @@ class RefreshTokenTest {
     private static final Instant T0 = Instant.parse("2026-01-01T00:00:00Z");
 
     private static RefreshToken token() {
-        return new RefreshToken(UUID.randomUUID(), UUID.randomUUID(), "h", UUID.randomUUID(), T0, T0.plus(Duration.ofDays(14)));
+        return new RefreshToken(UUID.randomUUID(), UUID.randomUUID(), "h", UUID.randomUUID(), T0, T0.plus(Duration.ofDays(14)),
+                T0.plus(Duration.ofDays(30)));
     }
 
     @Test
@@ -48,5 +49,12 @@ class RefreshTokenTest {
         RefreshToken t = token();
         assertThatThrownBy(() -> t.rotateTo(UUID.randomUUID(), T0.plus(Duration.ofDays(15))))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void tokenCannotOutliveItsFamily() {
+        assertThatThrownBy(() -> new RefreshToken(UUID.randomUUID(), UUID.randomUUID(), "h", UUID.randomUUID(), T0,
+                T0.plus(Duration.ofDays(14)), T0.plus(Duration.ofDays(13))))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

@@ -11,7 +11,6 @@ import com.ecom.inventory.proto.v1.GetReservationRequest;
 import com.ecom.inventory.proto.v1.InventoryServiceGrpc;
 import com.ecom.inventory.proto.v1.ReservationStatus;
 import com.ecom.inventory.proto.v1.SkuQuantity;
-import com.ecom.platform.grpc.GrpcServerLifecycle;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
@@ -22,6 +21,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.grpc.server.lifecycle.GrpcServerLifecycle;
 
 class InventoryGrpcIT extends AbstractInventoryIT {
 

@@ -1,15 +1,17 @@
 package com.ecom.user.it;
 
+import static com.ecom.testing.RestCalls.exchange;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ecom.common.events.EventTopics;
 import com.ecom.user.application.AdminBootstrap;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.SignedJWT;
+import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -18,9 +20,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 class AuthFlowIT extends AbstractIT {
 
@@ -39,7 +44,7 @@ class AuthFlowIT extends AbstractIT {
         assertThat(rows.getFirst().get("topic")).isEqualTo(EventTopics.USER_REGISTERED);
         String payload = (String) rows.getFirst().get("payload");
         JsonNode envelope = mapper.readTree(payload);
-        assertThat(envelope.path("payload").path("userId").asText()).isEqualTo(userId.toString());
+        assertThat(envelope.path("payload").path("userId").asString()).isEqualTo(userId.toString());
         assertThat(payload).doesNotContain(email).doesNotContain("Test User");
 
         String hash = jdbc.queryForObject("SELECT password_hash FROM users WHERE id = ?", String.class, userId);
@@ -113,6 +118,30 @@ class AuthFlowIT extends AbstractIT {
     }
 
     @Test
+    void refreshCannotExtendSessionPastFamilyExpiry() {
+        String email = uniqueEmail();
+        UUID userId = register(email, "correct-horse-1");
+        String first = refreshCookie(login(email, "correct-horse-1")).getValue();
+
+        Timestamp familyEnd = jdbc.queryForObject(
+                "SELECT family_expires_at FROM refresh_tokens WHERE user_id = ?", Timestamp.class, userId);
+        assertThat(Duration.between(Instant.now(), familyEnd.toInstant())).isBetween(
+                Duration.ofDays(30).minusMinutes(1), Duration.ofDays(30));
+
+        // fast-forward: the session now ends in 60s
+        jdbc.update("UPDATE refresh_tokens SET family_expires_at = now() + interval '60 seconds',"
+                + " expires_at = now() + interval '30 seconds' WHERE user_id = ?", userId);
+
+        var rotated = withRefreshCookie("/auth/refresh", first);
+        assertThat(rotated.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(refreshCookie(rotated).getMaxAge()).isBetween(1L, 60L);
+        Integer cappedRows = jdbc.queryForObject(
+                "SELECT count(*) FROM refresh_tokens WHERE user_id = ? AND revoked_at IS NULL"
+                        + " AND expires_at = family_expires_at", Integer.class, userId);
+        assertThat(cappedRows).isEqualTo(1);
+    }
+
+    @Test
     void onlyHashOfRefreshTokenIsStored() {
         String email = uniqueEmail();
         UUID userId = register(email, "correct-horse-1");
@@ -169,7 +198,8 @@ class AuthFlowIT extends AbstractIT {
         UUID userId = register(email, "correct-horse-1");
         String accessToken = (String) login(email, "correct-horse-1").getBody().get("accessToken");
 
-        ResponseEntity<String> jwks = http.getForEntity("/.well-known/jwks.json", String.class);
+        ResponseEntity<String> jwks =
+                exchange(http, HttpMethod.GET, "/.well-known/jwks.json", null, new HttpHeaders(), String.class);
         assertThat(jwks.getStatusCode()).isEqualTo(HttpStatus.OK);
         JWKSet set = JWKSet.parse(jwks.getBody());
         assertThat(jwks.getBody()).doesNotContain("\"d\"");

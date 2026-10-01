@@ -31,7 +31,7 @@ class GatewayFiltersTest {
         new HeaderSanitizingFilter().filter(exchange, chain).block();
 
         HttpHeaders h = forwarded.get().getRequest().getHeaders();
-        assertThat(h.keySet()).noneMatch(k -> k.toLowerCase().startsWith("x-user-"));
+        assertThat(h.headerNames()).noneMatch(k -> k.toLowerCase().startsWith("x-user-"));
         assertThat(h.getFirst("Accept")).isEqualTo("application/json");
         String cid = h.getFirst("X-Correlation-Id");
         assertThat(UUID.fromString(cid)).isNotNull();
@@ -50,7 +50,7 @@ class GatewayFiltersTest {
         HttpHeaders h = forwarded.get().getRequest().getHeaders();
         assertThat(h.getFirst("X-User-Id")).isEqualTo("user-1");
         assertThat(h.getFirst("X-User-Roles")).isEqualTo("CUSTOMER,ADMIN");
-        assertThat(h.containsKey(HttpHeaders.AUTHORIZATION)).isFalse();
+        assertThat(h.containsHeader(HttpHeaders.AUTHORIZATION)).isFalse();
     }
 
     @Test
@@ -60,7 +60,7 @@ class GatewayFiltersTest {
         new JwtClaimsPropagationFilter().filter(exchange, chain).block();
 
         HttpHeaders h = forwarded.get().getRequest().getHeaders();
-        assertThat(h.containsKey(HttpHeaders.AUTHORIZATION)).isFalse();
-        assertThat(h.containsKey("X-User-Id")).isFalse();
+        assertThat(h.containsHeader(HttpHeaders.AUTHORIZATION)).isFalse();
+        assertThat(h.containsHeader("X-User-Id")).isFalse();
     }
 }

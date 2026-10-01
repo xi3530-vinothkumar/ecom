@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -41,7 +40,7 @@ class AuthServiceTest {
     private final TokenIssuer tokenIssuer = mock(TokenIssuer.class);
     private final PasswordEncoder encoder = mock(PasswordEncoder.class);
     private final AuthProperties props = new AuthProperties(
-            false, Duration.ofDays(14), false, "refresh_token", "/auth", null, null,
+            false, Duration.ofDays(14), Duration.ofDays(30), "refresh_token", "/auth", null, null,
             new AuthProperties.Lockout(5, Duration.ofMinutes(15), Duration.ofMinutes(15)));
 
     private AuthService service;
@@ -58,13 +57,14 @@ class AuthServiceTest {
 
     private RefreshToken storedToken(String raw) {
         RefreshToken t = new RefreshToken(UUID.randomUUID(), user.getId(), OpaqueTokens.sha256Hex(raw),
-                UUID.randomUUID(), NOW.minusSeconds(60), NOW.plus(Duration.ofDays(1)));
+                UUID.randomUUID(), NOW.minusSeconds(60), NOW.plus(Duration.ofDays(1)), NOW.plus(Duration.ofDays(29)));
         when(refreshTokens.findByTokenHashForUpdate(OpaqueTokens.sha256Hex(raw))).thenReturn(Optional.of(t));
         return t;
     }
 
     private TokenIssuer.Minted minted(UUID familyId) {
-        RefreshToken next = new RefreshToken(UUID.randomUUID(), user.getId(), "next", familyId, NOW, NOW.plus(Duration.ofDays(14)));
+        RefreshToken next = new RefreshToken(UUID.randomUUID(), user.getId(), "next", familyId, NOW, NOW.plus(Duration.ofDays(14)),
+                NOW.plus(Duration.ofDays(29)));
         return new TokenIssuer.Minted(
                 new IssuedTokens(user.getId(), user.getRoles(), "jwt", 900, "raw-next", next.getExpiresAt()), next);
     }
@@ -73,7 +73,7 @@ class AuthServiceTest {
     void activeTokenIsRotatedWithinSameFamily() {
         RefreshToken presented = storedToken("raw-1");
         TokenIssuer.Minted next = minted(presented.getFamilyId());
-        when(tokenIssuer.mint(user, presented.getFamilyId())).thenReturn(next);
+        when(tokenIssuer.continueFamily(user, presented)).thenReturn(next);
 
         IssuedTokens result = service.refresh("raw-1");
 
@@ -92,18 +92,18 @@ class AuthServiceTest {
                 .isInstanceOfSatisfying(EcomException.class, e -> assertThat(e.code()).isEqualTo(ErrorCode.UNAUTHENTICATED));
 
         verify(refreshTokens).revokeFamily(presented.getFamilyId(), NOW);
-        verify(tokenIssuer, never()).mint(any(), any());
+        verify(tokenIssuer, never()).continueFamily(any(), any());
     }
 
     @Test
     void expiredTokenIsRejectedWithoutRevokingFamily() {
         RefreshToken t = new RefreshToken(UUID.randomUUID(), user.getId(), OpaqueTokens.sha256Hex("old"),
-                UUID.randomUUID(), NOW.minus(Duration.ofDays(15)), NOW.minus(Duration.ofDays(1)));
+                UUID.randomUUID(), NOW.minus(Duration.ofDays(15)), NOW.minus(Duration.ofDays(1)), NOW.plus(Duration.ofDays(15)));
         when(refreshTokens.findByTokenHashForUpdate(OpaqueTokens.sha256Hex("old"))).thenReturn(Optional.of(t));
 
         assertThatThrownBy(() -> service.refresh("old")).isInstanceOf(EcomException.class);
         verify(refreshTokens, never()).revokeFamily(any(), any());
-        verify(tokenIssuer, never()).mint(any(), any());
+        verify(tokenIssuer, never()).continueFamily(any(), any());
     }
 
     @Test
@@ -139,7 +139,7 @@ class AuthServiceTest {
         assertThatThrownBy(() -> service.login("a@example.com", "right"))
                 .hasMessage(AuthService.INVALID_CREDENTIALS);
         verify(encoder, never()).matches("right", "hash");
-        verify(tokenIssuer, never()).mint(any(), any());
+        verify(tokenIssuer, never()).startFamily(any());
     }
 
     @Test
@@ -149,7 +149,7 @@ class AuthServiceTest {
         when(users.findByEmail("a@example.com")).thenReturn(Optional.of(user));
         when(loginFailures.findForUpdate(user.getId())).thenReturn(Optional.of(failures));
         when(encoder.matches("right", "hash")).thenReturn(true);
-        when(tokenIssuer.mint(eq(user), any())).thenAnswer(inv -> minted(inv.getArgument(1)));
+        when(tokenIssuer.startFamily(user)).thenReturn(minted(UUID.randomUUID()));
 
         IssuedTokens tokens = service.login(" A@example.com ", "right");
 

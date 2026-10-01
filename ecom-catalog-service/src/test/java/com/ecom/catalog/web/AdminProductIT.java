@@ -12,12 +12,12 @@ import com.ecom.catalog.CatalogIntegrationTest;
 import com.ecom.common.events.EventTopics;
 import com.ecom.testing.Containers;
 import com.ecom.testing.KafkaTestSupport;
-import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
 
 class AdminProductIT extends CatalogIntegrationTest {
 
@@ -32,7 +32,7 @@ class AdminProductIT extends CatalogIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.version").value(1))
                 .andExpect(jsonPath("$.variants.length()").value(2)));
-        String id = created.path("id").asText();
+        String id = created.path("id").asString();
 
         // price change on A -> version 2
         var update = new HashMap<>(product("Tee", category, List.of(variant(skuA, "17.00"), variant(skuB, "24.50"))));
@@ -61,27 +61,27 @@ class AdminProductIT extends CatalogIntegrationTest {
         assertThat(dbVersion).isEqualTo(4);
 
         List<JsonNode> events = outboxEvents(id);
-        assertThat(events).extracting(e -> e.path("eventType").asText()).containsExactly(
+        assertThat(events).extracting(e -> e.path("eventType").asString()).containsExactly(
                 EventTopics.PRODUCT_CREATED, EventTopics.PRODUCT_UPDATED, EventTopics.PRODUCT_UPDATED,
                 EventTopics.PRODUCT_DELETED);
         assertThat(events).extracting(e -> e.path("payload").path("version").asLong()).containsExactly(1L, 2L, 3L, 4L);
-        assertThat(events).allMatch(e -> e.path("producerService").asText().equals("catalog-service"));
+        assertThat(events).allMatch(e -> e.path("producerService").asString().equals("catalog-service"));
 
         JsonNode priceChange = events.get(1).path("payload");
         assertThat(priceChange.path("variants")).hasSize(2);
-        JsonNode aPrice = priceChange.path("variants").get(0).path("sku").asText().equals(skuA)
+        JsonNode aPrice = priceChange.path("variants").get(0).path("sku").asString().equals(skuA)
                 ? priceChange.path("variants").get(0).path("price")
                 : priceChange.path("variants").get(1).path("price");
-        assertThat(aPrice.path("currencyCode").asText()).isEqualTo("EUR");
+        assertThat(aPrice.path("currencyCode").asString()).isEqualTo("EUR");
         assertThat(aPrice.path("units").asLong()).isEqualTo(17);
 
         assertThat(events.get(2).path("payload").path("variants")).hasSize(1);
         JsonNode deleted = events.get(3).path("payload");
-        assertThat(deleted.path("skus")).extracting(JsonNode::asText).containsExactlyInAnyOrder(skuA, skuB);
+        assertThat(deleted.path("skus")).extracting(JsonNode::asString).containsExactlyInAnyOrder(skuA, skuB);
 
         // relay publishes the rows to Kafka with productId as the key
         var relayed = KafkaTestSupport.await(Containers.kafka().getBootstrapServers(), mapper,
-                EventTopics.PRODUCT_DELETED, e -> id.equals(e.payload().path("productId").asText()), Duration.ofSeconds(30));
+                EventTopics.PRODUCT_DELETED, e -> id.equals(e.payload().path("productId").asString()), Duration.ofSeconds(30));
         assertThat(relayed).hasSize(1);
     }
 
@@ -176,7 +176,7 @@ class AdminProductIT extends CatalogIntegrationTest {
     void categoriesCanBeCreatedMovedAndListed() throws Exception {
         String parent = createCategory("Parent " + sku());
         String child = read(mvc.perform(asAdmin(json(post("/admin/categories"), Map.of("name", "Child " + sku(), "parentId", parent))))
-                .andExpect(status().isCreated())).path("id").asText();
+                .andExpect(status().isCreated())).path("id").asString();
 
         mvc.perform(asAdmin(json(put("/admin/categories/" + parent), Map.of("name", "Parent", "parentId", child))))
                 .andExpect(status().isBadRequest());

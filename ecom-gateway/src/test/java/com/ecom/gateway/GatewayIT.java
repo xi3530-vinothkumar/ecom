@@ -1,8 +1,9 @@
 package com.ecom.gateway;
 
+import com.ecom.testing.ContainerConfigs;
+import org.springframework.context.annotation.Import;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.ecom.testing.Containers;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -10,6 +11,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -18,7 +20,9 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
+@Import({ContainerConfigs.Redis.class})
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureWebTestClient
 @ActiveProfiles("test")
 class GatewayIT {
 
@@ -31,7 +35,6 @@ class GatewayIT {
 
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry r) {
-        Containers.registerRedis(r);
         for (String svc : List.of("user", "catalog", "inventory", "cart", "order", "payment", "search")) {
             r.add("ecom.gateway.backends." + svc, STUB::baseUrl);
         }
@@ -138,6 +141,18 @@ class GatewayIT {
     }
 
     @Test
+    void mobileCredentialEndpointsArePublicAndIgnoreStaleTokens() {
+        // mobile login is covered by the shared login bucket; exercising it here would drain loginIsRateLimitedPerClient
+        for (String path : List.of("/auth/mobile/refresh", "/auth/mobile/logout")) {
+            client.post().uri(path).headers(h -> h.setBearerAuth(TOKENS.expired("x")))
+                    .contentType(MediaType.APPLICATION_JSON).bodyValue("{\"refreshToken\":\"t\"}")
+                    .exchange().expectStatus().isOk();
+            assertThat(STUB.requestsTo(path)).last()
+                    .satisfies(r -> assertThat(r.header(HttpHeaders.AUTHORIZATION)).isEmpty());
+        }
+    }
+
+    @Test
     void loginIsRateLimitedPerClient() {
         List<Integer> statuses = new ArrayList<>();
         for (int i = 0; i < 8; i++) {
@@ -201,7 +216,7 @@ class GatewayIT {
         int before = STUB.requestsTo("/webhooks/psp").size();
         client.post().uri("/webhooks/psp").contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new byte[300 * 1024])
-                .exchange().expectStatus().isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
+                .exchange().expectStatus().isEqualTo(HttpStatus.CONTENT_TOO_LARGE);
         assertThat(STUB.requestsTo("/webhooks/psp")).hasSize(before);
     }
 

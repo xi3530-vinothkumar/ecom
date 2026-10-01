@@ -28,7 +28,7 @@ Two design passes (domain/service layer and infra/platform layer) were run in pa
 
 ```
 ecom/
-├── pom.xml                          # parent POM: BOM imports, plugin mgmt, Java 21
+├── pom.xml                          # parent POM: BOM imports, plugin mgmt, Java 25
 ├── .gitignore
 ├── .github/workflows/                # CI (ci.yml, docker-publish.yml, deploy-staging.yml)
 ├── docs/architecture/                 # ADRs, C4 diagrams
@@ -71,7 +71,7 @@ Each service module uses a lightweight layout: `web` (REST controllers, client-f
 
 **Why one platform starter instead of six `ecom-common-*` modules:** core/web/grpc/kafka/security/observability always version and ship together, so splitting them adds POM churn and makes the dependency graph harder to follow for no benefit. Each concern is its own package inside the starter, with its own `@AutoConfiguration` guarded by `@ConditionalOnClass` (a service without Kafka on its classpath gets no Kafka beans). Proto, events and testing stay separate because they have different consumers (e.g. only tests depend on testing).
 
-Parent POM centralizes Spring Boot/Spring Cloud/gRPC/Micrometer/Testcontainers BOMs, Java 21, and shared plugin config (`protobuf-maven-plugin`, `spring-boot:build-image` via Cloud Native Buildpacks — no hand-written Dockerfiles).
+Parent POM centralizes Spring Boot/Spring Cloud/gRPC/Micrometer/Testcontainers BOMs, Java 25, and shared plugin config (`protobuf-maven-plugin`, `spring-boot:build-image` via Cloud Native Buildpacks — no hand-written Dockerfiles).
 
 ---
 

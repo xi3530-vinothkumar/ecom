@@ -38,7 +38,7 @@ public class HeaderSanitizingFilter implements GlobalFilter, Ordered {
     }
 
     static void stripIdentityHeaders(HttpHeaders headers) {
-        List<String> spoofed = headers.keySet().stream()
+        List<String> spoofed = headers.headerNames().stream()
                 .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(IDENTITY_HEADER_PREFIX))
                 .toList();
         spoofed.forEach(headers::remove);
