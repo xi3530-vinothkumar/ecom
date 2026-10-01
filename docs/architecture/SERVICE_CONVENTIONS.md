@@ -113,7 +113,7 @@ Env var names used by infra (must be honored exactly): `HTTP_PORT, GRPC_PORT, DB
 ## Public REST surface (Gateway routes by path prefix, path forwarded unchanged)
 | Prefix | Service | Auth |
 |---|---|---|
-| `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `POST /users` (register) | user | public |
+| `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/mobile/login`, `POST /auth/mobile/refresh`, `POST /auth/mobile/logout`, `POST /users` (register) | user | public |
 | `/users/me/**` | user | JWT |
 | `/.well-known/jwks.json` | user | internal only (Gateway fetches it via service DNS; not routed publicly) |
 | `GET /products/**`, `GET /categories/**` | catalog | public |
