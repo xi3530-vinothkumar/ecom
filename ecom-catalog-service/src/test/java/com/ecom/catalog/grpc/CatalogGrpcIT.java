@@ -11,11 +11,10 @@ import com.ecom.catalog.proto.v1.GetProductRequest;
 import com.ecom.catalog.proto.v1.GetProductsBatchRequest;
 import com.ecom.catalog.proto.v1.ListCategoriesRequest;
 import com.ecom.catalog.proto.v1.ProductItem;
-import com.ecom.platform.grpc.GrpcServerLifecycle;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
+import io.grpc.netty.NettyChannelBuilder;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +24,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.grpc.server.lifecycle.GrpcServerLifecycle;
 
 class CatalogGrpcIT extends CatalogIntegrationTest {
 

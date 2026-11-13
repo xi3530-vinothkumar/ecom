@@ -72,15 +72,17 @@ public class StockLevelRepository {
     /** Applies deltas and bumps the row version; the table CHECKs reject any over-reservation. */
     public StockLevel adjust(String sku, int onHandDelta, int reservedDelta) {
         return jdbc.queryForObject(
-                "UPDATE stock_levels SET on_hand = on_hand + ?, reserved = reserved + ?, version = version + 1,"
-                        + " updated_at = now() WHERE sku = ? AND warehouse_id = ? RETURNING " + COLUMNS,
+                """
+                UPDATE stock_levels SET on_hand = on_hand + ?, reserved = reserved + ?, version = version + 1,
+                updated_at = now() WHERE sku = ? AND warehouse_id = ? RETURNING\s""" + COLUMNS,
                 MAPPER, onHandDelta, reservedDelta, sku, StockLevel.DEFAULT_WAREHOUSE);
     }
 
     public StockLevel setOnHand(String sku, int onHand) {
         return jdbc.queryForObject(
-                "UPDATE stock_levels SET on_hand = ?, version = version + 1, updated_at = now()"
-                        + " WHERE sku = ? AND warehouse_id = ? RETURNING " + COLUMNS,
+                """
+                UPDATE stock_levels SET on_hand = ?, version = version + 1, updated_at = now()
+                WHERE sku = ? AND warehouse_id = ? RETURNING\s""" + COLUMNS,
                 MAPPER, onHand, sku, StockLevel.DEFAULT_WAREHOUSE);
     }
 

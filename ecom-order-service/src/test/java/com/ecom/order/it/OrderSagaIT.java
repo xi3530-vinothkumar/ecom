@@ -13,11 +13,11 @@ import com.ecom.common.events.payload.PaymentVoidedPayload;
 import com.ecom.common.events.payload.ReservationExpiredPayload;
 import com.ecom.testing.Containers;
 import com.ecom.testing.KafkaTestSupport;
-import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
 
 class OrderSagaIT extends AbstractOrderIT {
 
@@ -61,8 +61,8 @@ class OrderSagaIT extends AbstractOrderIT {
         assertThat(status(id)).isEqualTo("CANCELLED");
         assertThat(cancelReason(id)).isEqualTo("OUT_OF_STOCK");
         JsonNode p = singleOutboxPayload(EventTopics.ORDER_CANCELLED, id);
-        assertThat(p.path("reason").asText()).isEqualTo("OUT_OF_STOCK");
-        assertThat(p.path("userId").asText()).isEqualTo(user);
+        assertThat(p.path("reason").asString()).isEqualTo("OUT_OF_STOCK");
+        assertThat(p.path("userId").asString()).isEqualTo(user);
         assertThat(p.path("lines")).hasSize(2);
     }
 
@@ -76,14 +76,14 @@ class OrderSagaIT extends AbstractOrderIT {
         assertThat(status(id)).isEqualTo("CONFIRMED");
         assertThat(sagaStep(id)).isEqualTo("PAYMENT_AUTHORIZED");
         List<EventEnvelope> confirmed = KafkaTestSupport.await(Containers.kafka().getBootstrapServers(), mapper,
-                EventTopics.ORDER_CONFIRMED, e -> id.toString().equals(e.payload().path("orderId").asText()), TIMEOUT);
+                EventTopics.ORDER_CONFIRMED, e -> id.toString().equals(e.payload().path("orderId").asString()), TIMEOUT);
         assertThat(confirmed).hasSize(1);
         JsonNode p = confirmed.getFirst().payload();
-        assertThat(p.path("userId").asText()).isEqualTo(user);
+        assertThat(p.path("userId").asString()).isEqualTo(user);
         assertThat(p.path("lines")).hasSize(2);
         assertThat(p.path("total").path("units").asLong()).isEqualTo(35);
         assertThat(p.path("total").path("nanos").asInt()).isEqualTo(810_000_000);
-        assertThat(p.path("total").path("currencyCode").asText()).isEqualTo("EUR");
+        assertThat(p.path("total").path("currencyCode").asString()).isEqualTo("EUR");
     }
 
     @Test
@@ -95,7 +95,7 @@ class OrderSagaIT extends AbstractOrderIT {
 
         assertThat(status(id)).isEqualTo("CANCELLED");
         assertThat(cancelReason(id)).isEqualTo("PAYMENT_DECLINED");
-        assertThat(singleOutboxPayload(EventTopics.ORDER_CANCELLED, id).path("reason").asText()).isEqualTo("PAYMENT_DECLINED");
+        assertThat(singleOutboxPayload(EventTopics.ORDER_CANCELLED, id).path("reason").asString()).isEqualTo("PAYMENT_DECLINED");
     }
 
     @Test
@@ -106,7 +106,7 @@ class OrderSagaIT extends AbstractOrderIT {
 
         assertThat(status(id)).isEqualTo("CANCELLED");
         assertThat(cancelReason(id)).isEqualTo("PAYMENT_TIMEOUT");
-        assertThat(singleOutboxPayload(EventTopics.ORDER_CANCELLED, id).path("reason").asText()).isEqualTo("PAYMENT_TIMEOUT");
+        assertThat(singleOutboxPayload(EventTopics.ORDER_CANCELLED, id).path("reason").asString()).isEqualTo("PAYMENT_TIMEOUT");
     }
 
     @Test

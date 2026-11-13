@@ -44,17 +44,19 @@ public class PaymentJdbcStore {
     /** @return true on first sight of {@code pspEventId}; false for a redelivery */
     public boolean recordWebhookEvent(String pspEventId, String type, Instant at) {
         return jdbc.update(
-                "INSERT INTO psp_webhook_events (psp_event_id, type, received_at) VALUES (?, ?, ?) "
-                        + "ON CONFLICT (psp_event_id) DO NOTHING",
+                """
+                INSERT INTO psp_webhook_events (psp_event_id, type, received_at) VALUES (?, ?, ?)
+                ON CONFLICT (psp_event_id) DO NOTHING""",
                 pspEventId, type, Timestamp.from(at)) == 1;
     }
 
     public void recordPaymentMethod(UUID userId, String pspRef, String brand, String last4, Instant at) {
         jdbc.update(
-                "INSERT INTO payment_methods (id, user_id, psp_ref, brand, last4, created_at) VALUES (?, ?, ?, ?, ?, ?) "
-                        + "ON CONFLICT (user_id, psp_ref) DO UPDATE SET "
-                        + "brand = COALESCE(EXCLUDED.brand, payment_methods.brand), "
-                        + "last4 = COALESCE(EXCLUDED.last4, payment_methods.last4)",
+                """
+                INSERT INTO payment_methods (id, user_id, psp_ref, brand, last4, created_at) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT (user_id, psp_ref) DO UPDATE SET
+                brand = COALESCE(EXCLUDED.brand, payment_methods.brand),
+                last4 = COALESCE(EXCLUDED.last4, payment_methods.last4)""",
                 UUID.randomUUID(), userId, pspRef, brand, last4, Timestamp.from(at));
     }
 }

@@ -36,8 +36,9 @@ public class ReservationRepository {
 
     public void insert(UUID orderId, String sku, int qty, Instant expiresAt) {
         jdbc.update(
-                "INSERT INTO stock_reservations (order_id, sku, warehouse_id, qty, status, expires_at)"
-                        + " VALUES (?, ?, ?, ?, ?, ?)",
+                """
+                INSERT INTO stock_reservations (order_id, sku, warehouse_id, qty, status, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?)""",
                 orderId, sku, StockLevel.DEFAULT_WAREHOUSE, qty, ReservationStatus.RESERVED.name(),
                 Timestamp.from(expiresAt));
     }
@@ -59,8 +60,9 @@ public class ReservationRepository {
         Collection<ReservationStatus> from = ReservationStatus.sourcesOf(to);
         return jdbc.update(
                 con -> {
-                    var ps = con.prepareStatement("UPDATE stock_reservations SET status = ?, updated_at = now()"
-                            + " WHERE order_id = ? AND sku = ? AND status = ANY (?)");
+                    var ps = con.prepareStatement("""
+                            UPDATE stock_reservations SET status = ?, updated_at = now()
+                            WHERE order_id = ? AND sku = ? AND status = ANY (?)""");
                     ps.setString(1, to.name());
                     ps.setObject(2, orderId);
                     ps.setString(3, sku);
@@ -72,8 +74,9 @@ public class ReservationRepository {
     /** Orders with at least one RESERVED line past expiry, oldest first. */
     public List<UUID> findOrdersDue(Instant now, int limit) {
         return jdbc.queryForList(
-                "SELECT order_id FROM stock_reservations WHERE status = 'RESERVED' AND expires_at <= ?"
-                        + " GROUP BY order_id ORDER BY min(expires_at) LIMIT ?",
+                """
+                SELECT order_id FROM stock_reservations WHERE status = 'RESERVED' AND expires_at <= ?
+                GROUP BY order_id ORDER BY min(expires_at) LIMIT ?""",
                 UUID.class, Timestamp.from(now), limit);
     }
 
@@ -93,10 +96,11 @@ public class ReservationRepository {
      */
     public int markExpiring(UUID orderId, Instant now) {
         return jdbc.update(
-                "WITH due AS (SELECT order_id, sku FROM stock_reservations"
-                        + " WHERE order_id = ? AND status = 'RESERVED' AND expires_at <= ? FOR UPDATE SKIP LOCKED)"
-                        + " UPDATE stock_reservations r SET status = 'EXPIRING', updated_at = now()"
-                        + " FROM due WHERE r.order_id = due.order_id AND r.sku = due.sku",
+                """
+                WITH due AS (SELECT order_id, sku FROM stock_reservations
+                WHERE order_id = ? AND status = 'RESERVED' AND expires_at <= ? FOR UPDATE SKIP LOCKED)
+                UPDATE stock_reservations r SET status = 'EXPIRING', updated_at = now()
+                FROM due WHERE r.order_id = due.order_id AND r.sku = due.sku""",
                 orderId, Timestamp.from(now));
     }
 

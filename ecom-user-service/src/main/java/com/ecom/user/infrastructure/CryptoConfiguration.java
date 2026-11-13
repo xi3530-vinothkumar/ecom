@@ -38,22 +38,21 @@ public class CryptoConfiguration {
      */
     @Bean
     JwtIssuer jwtIssuer(JwtProperties props, AuthProperties auth, Clock clock) {
-        String pem = props.getPrivateKeyPem();
+        String pem = props.privateKeyPem();
         if (auth.ephemeralJwtKey()) {
             log.warn("JWT_EPHEMERAL_KEY=true: signing with a freshly generated RSA key (kid={}). "
                     + "Issued tokens will not survive a restart and replicas will not share keys. "
-                    + "Never use this outside local/Compose.", props.getKeyId());
+                    + "Never use this outside local/Compose.", props.keyId());
             pem = generateRsaPkcs8Pem();
         } else if (pem == null || pem.isBlank()) {
             throw new IllegalStateException(
                     "No JWT signing key: set JWT_PRIVATE_KEY_PEM (PKCS#8 RSA) or JWT_EPHEMERAL_KEY=true for local use");
         }
-        if (props.getKeyId() == null || props.getKeyId().isBlank()) {
+        if (props.keyId() == null || props.keyId().isBlank()) {
             throw new IllegalStateException("JWT_KEY_ID must be set");
         }
         // env vars frequently carry PEMs with literal "\n" escapes
-        props.setPrivateKeyPem(pem.replace("\\n", "\n"));
-        return new JwtIssuer(props, clock);
+        return new JwtIssuer(props.withPrivateKeyPem(pem.replace("\\n", "\n")), clock);
     }
 
     private static String generateRsaPkcs8Pem() {

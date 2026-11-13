@@ -52,9 +52,9 @@ class ConcurrencyIT extends SagaTestBase {
             for (int i = 0; i < shoppers; i++) {
                 String orderId = checkouts.get(i).get();
                 var order = awaitTerminal(all.get(i), orderId);
-                String status = order.path("status").asText();
+                String status = order.path("status").asString();
                 if (status.equals("CANCELLED")) {
-                    assertThat(order.path("cancelReason").asText()).isEqualTo("OUT_OF_STOCK");
+                    assertThat(order.path("cancelReason").asString()).isEqualTo("OUT_OF_STOCK");
                 }
                 statuses.add(status);
             }

@@ -20,7 +20,7 @@ class CompensationIT extends SagaTestBase {
         String orderId = placeOrder(s, Map.of(sku, 2), VISA);
 
         var order = awaitStatus(s, orderId, "CANCELLED");
-        assertThat(order.path("cancelReason").asText()).isEqualTo("OUT_OF_STOCK");
+        assertThat(order.path("cancelReason").asString()).isEqualTo("OUT_OF_STOCK");
         await().atMost(SETTLE).untilAsserted(() ->
                 assertThat(sys.events().count(EventTopics.INVENTORY_RESERVATION_FAILED, orderId)).isEqualTo(1));
         // give Payment a chance to (wrongly) act, then assert it never did
@@ -43,7 +43,7 @@ class CompensationIT extends SagaTestBase {
         String orderId = placeOrder(s, Map.of(sku, 2), DECLINED);
 
         var order = awaitStatus(s, orderId, "CANCELLED");
-        assertThat(order.path("cancelReason").asText()).isEqualTo("PAYMENT_DECLINED");
+        assertThat(order.path("cancelReason").asString()).isEqualTo("PAYMENT_DECLINED");
         var tx = awaitPayment(orderId, "FAILED");
         assertThat(tx.pspReference()).isNotBlank();
         awaitReservations(orderId, "RELEASED");

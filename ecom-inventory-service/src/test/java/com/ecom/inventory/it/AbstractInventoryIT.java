@@ -5,8 +5,7 @@ import com.ecom.common.events.payload.OrderLinePayload;
 import com.ecom.inventory.domain.ReservationStatus;
 import com.ecom.inventory.domain.StockLevel;
 import com.ecom.inventory.infrastructure.StockLevelRepository;
-import com.ecom.testing.Containers;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ecom.testing.ContainerConfigs;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -15,26 +14,21 @@ import java.util.stream.Collectors;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
+import tools.jackson.databind.ObjectMapper;
 
 /** One shared context for all inventory ITs (identical config => cached). Tests isolate via unique SKUs/orders. */
+@Import({ContainerConfigs.Postgres.class, ContainerConfigs.Kafka.class})
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
-            "ecom.grpc.server.port=0",
+            "spring.grpc.server.port=0",
             "ecom.inventory.sweep-enabled=false",
             "ecom.outbox.poll-interval=100ms",
-            "management.tracing.enabled=false"
+            "management.tracing.export.enabled=false"
         })
 abstract class AbstractInventoryIT {
-
-    @DynamicPropertySource
-    static void containers(DynamicPropertyRegistry r) {
-        Containers.registerPostgres(r);
-        Containers.registerKafka(r);
-    }
 
     @Autowired protected JdbcTemplate jdbc;
     @Autowired protected ObjectMapper mapper;

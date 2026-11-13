@@ -49,7 +49,7 @@ public class S3ImageStorage implements ImageStorage {
         try {
             s3.headObject(HeadObjectRequest.builder().bucket(bucket).key(key).build());
             return true;
-        } catch (NoSuchKeyException e) {
+        } catch (NoSuchKeyException _) {
             return false;
         } catch (S3Exception e) {
             if (e.statusCode() == 404) {

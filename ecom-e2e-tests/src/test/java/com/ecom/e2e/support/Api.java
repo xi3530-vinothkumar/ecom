@@ -1,8 +1,5 @@
 package com.ecom.e2e.support;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.MissingNode;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -13,6 +10,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.MissingNode;
 
 /**
  * Calls the services' REST APIs directly, stamping the headers the Gateway would add
@@ -34,7 +34,7 @@ public final class Api {
         }
 
         public String text(String field) {
-            return body.path(field).asText();
+            return body.path(field).asString();
         }
     }
 
@@ -93,7 +93,7 @@ public final class Api {
     private static JsonNode parse(String s) {
         try {
             return Json.MAPPER.readTree(s);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException _) {
             return MissingNode.getInstance();
         }
     }
@@ -160,7 +160,7 @@ public final class Api {
 
     public int cartQty(String userId, String sku) {
         for (JsonNode line : cart(userId).path("lines")) {
-            if (sku.equals(line.path("sku").asText())) {
+            if (sku.equals(line.path("sku").asString())) {
                 return line.path("quantity").asInt();
             }
         }

@@ -1,10 +1,11 @@
 package com.ecom.common.events;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ecom.common.events.payload.EventPayload;
 import java.time.Instant;
 import java.util.UUID;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Envelope wrapped around every event on Kafka. Schema evolution is governed by {@code eventVersion}
@@ -20,10 +21,10 @@ public record EventEnvelope(
         String producerService,
         JsonNode payload) {
 
-    public <T> T payloadAs(ObjectMapper mapper, Class<T> type) {
+    public <T extends EventPayload> T payloadAs(ObjectMapper mapper, Class<T> type) {
         try {
             return mapper.treeToValue(payload, type);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("Cannot bind payload of " + eventType + " to " + type.getSimpleName(), e);
         }
     }
@@ -39,7 +40,7 @@ public record EventEnvelope(
     public static EventEnvelope parse(ObjectMapper mapper, String json) {
         try {
             return mapper.readValue(json, EventEnvelope.class);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("Malformed event envelope", e);
         }
     }

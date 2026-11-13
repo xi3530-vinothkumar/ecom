@@ -79,8 +79,8 @@ public class CheckoutService {
 
         List<PricedLine> lines = priceCart(cmd.userId());
         ShippingAddress address = snapshotAddress(cmd.userId(), cmd.shippingAddressId());
-        Money shippingFee = Money.of(props.getShippingFee(), props.getCurrency());
-        OrderTotals totals = OrderTotals.compute(lines, props.getVatRate(), shippingFee);
+        Money shippingFee = Money.of(props.shippingFee(), props.currency());
+        OrderTotals totals = OrderTotals.compute(lines, props.vatRate(), shippingFee);
 
         Order order = Order.placePending(cmd.userId(), cmd.idempotencyKey(), requestHash, cmd.paymentMethodRef(),
                 address, lines, totals, Instant.now(clock));
@@ -137,7 +137,7 @@ public class CheckoutService {
                 throw EcomException.unprocessable("Product " + sku + " has no price");
             }
             Money price = MoneyMapper.fromProto(p.getPrice());
-            if (!props.getCurrency().equals(price.currencyCode())) {
+            if (!props.currency().equals(price.currencyCode())) {
                 throw EcomException.unprocessable("Product " + sku + " is priced in unsupported currency "
                         + price.currencyCode());
             }

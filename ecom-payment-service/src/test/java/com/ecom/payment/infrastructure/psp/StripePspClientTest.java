@@ -11,7 +11,6 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.ecom.payment.application.psp.AuthorizationResult;
 import com.ecom.payment.application.psp.PspException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -20,6 +19,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.ObjectMapper;
 
 class StripePspClientTest {
 

@@ -30,22 +30,14 @@ public class CartMergeClient {
      * authenticated user for the duration of the call: Cart may authorize on the propagated identity.
      */
     public void merge(String guestCartId, UUID userId, Set<String> roles) {
-        CallContext previous = CallContext.current().orElse(null);
-        String correlationId = CorrelationIds.acceptOrGenerate(previous == null ? null : previous.correlationId());
-        CallContext.set(new CallContext(correlationId, userId.toString(), roles));
-        try {
-            MergeCartRequest request = MergeCartRequest.newBuilder()
-                    .setGuestCartId(guestCartId)
-                    .setUserId(userId.toString())
-                    .build();
-            calls.call(CART, () -> stub().mergeCart(request));
-        } finally {
-            if (previous != null) {
-                CallContext.set(previous);
-            } else {
-                CallContext.clear();
-            }
-        }
+        String correlationId = CorrelationIds.acceptOrGenerate(CallContext.correlationIdOrNull());
+        MergeCartRequest request = MergeCartRequest.newBuilder()
+                .setGuestCartId(guestCartId)
+                .setUserId(userId.toString())
+                .build();
+        // nested scope: the outer (anonymous) context is restored automatically afterwards
+        CallContext.run(new CallContext(correlationId, userId.toString(), roles),
+                () -> calls.call(CART, () -> stub().mergeCart(request)));
     }
 
     private CartServiceGrpc.CartServiceBlockingStub stub() {

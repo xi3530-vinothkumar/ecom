@@ -1,6 +1,15 @@
 spring:
   application:
     name: notification-service
+  grpc:
+    client:
+      channel:
+        user:
+          target: ${USER_GRPC_ADDRESS:localhost:9091}
+          default:
+            deadline: 2s
+          keepalive:
+            time: 30s
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/notificationdb}
     username: ${DB_USERNAME:notification}
@@ -14,12 +23,6 @@ spring:
 server:
   port: ${HTTP_PORT:8087}
 ecom:
-  grpc:
-    server:
-      enabled: false
-    clients:
-      user:
-        address: ${USER_GRPC_ADDRESS:localhost:9091}
   kafka:
     create-topics: ${KAFKA_CREATE_TOPICS:false}
   notification:

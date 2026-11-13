@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Shared logging: JSON to stdout (MDC: traceId, spanId, correlationId, userId), emails/phones masked.
+<!-- Shared logging: Spring Boot structured JSON (logstash format) to stdout, MDC included (traceId,
+     spanId, correlationId, userId), emails/phones masked by PiiMaskingJsonMembersCustomizer
+     (see logging.structured.* in ecom-platform-defaults.yml).
      Activate profile "plain-logs" for human-readable local output. -->
 <configuration>
-    <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="unknown"/>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
     <springProfile name="plain-logs">
-        <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
         <appender name="OUT" class="ch.qos.logback.core.ConsoleAppender">
             <encoder>
                 <pattern>%d{HH:mm:ss.SSS} %-5level [%X{correlationId:-}] [%X{traceId:-}] %logger{36} - %msg%n</pattern>
@@ -15,18 +16,9 @@
 
     <springProfile name="!plain-logs">
         <appender name="OUT" class="ch.qos.logback.core.ConsoleAppender">
-            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
-                <customFields>{"service":"${appName}"}</customFields>
-                <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
-                    <valueMask>
-                        <value>[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}</value>
-                        <mask>***@***</mask>
-                    </valueMask>
-                    <valueMask>
-                        <value>\+[0-9][0-9 ()-]{7,}[0-9]</value>
-                        <mask>***PHONE***</mask>
-                    </valueMask>
-                </jsonGeneratorDecorator>
+            <encoder class="org.springframework.boot.logging.logback.StructuredLogEncoder">
+                <format>logstash</format>
+                <charset>UTF-8</charset>
             </encoder>
         </appender>
     </springProfile>

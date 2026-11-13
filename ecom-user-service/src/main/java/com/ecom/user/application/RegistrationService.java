@@ -82,7 +82,7 @@ public class RegistrationService {
                 blankToNull(r.phone()), roles, clock.instant());
         try {
             users.saveAndFlush(user);
-        } catch (DataIntegrityViolationException e) {
+        } catch (DataIntegrityViolationException _) {
             // lost a race with a concurrent registration of the same address (unique lower(email))
             throw EcomException.conflict("An account with this email already exists");
         }

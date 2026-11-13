@@ -8,24 +8,17 @@ import io.grpc.ClientInterceptor;
 import io.grpc.ForwardingClientCall;
 import io.grpc.Metadata;
 import io.grpc.MethodDescriptor;
-import java.time.Duration;
-import java.util.concurrent.TimeUnit;
 
-/** Re-emits correlation id + user identity as metadata and applies a default deadline. */
+/**
+ * Re-emits correlation id + user identity as metadata. Registered as a Spring gRPC global client
+ * interceptor; the per-channel default deadline comes from
+ * {@code spring.grpc.client.channel.<name>.default.deadline}.
+ */
 public class CallContextClientInterceptor implements ClientInterceptor {
-
-    private final Duration defaultDeadline;
-
-    public CallContextClientInterceptor(Duration defaultDeadline) {
-        this.defaultDeadline = defaultDeadline;
-    }
 
     @Override
     public <Q, R> ClientCall<Q, R> interceptCall(MethodDescriptor<Q, R> method, CallOptions options, Channel next) {
-        CallOptions effective = options.getDeadline() == null
-                ? options.withDeadlineAfter(defaultDeadline.toMillis(), TimeUnit.MILLISECONDS)
-                : options;
-        return new ForwardingClientCall.SimpleForwardingClientCall<>(next.newCall(method, effective)) {
+        return new ForwardingClientCall.SimpleForwardingClientCall<>(next.newCall(method, options)) {
             @Override
             public void start(Listener<R> listener, Metadata headers) {
                 CallContext.current().ifPresent(ctx -> {

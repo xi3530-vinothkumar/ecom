@@ -2,13 +2,13 @@ package com.ecom.platform.kafka;
 
 import com.ecom.common.events.EventEnvelope;
 import com.ecom.platform.core.CallContext;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The only way services publish events. Writes an outbox row that commits or rolls back together
@@ -44,7 +44,7 @@ public class OutboxWriter {
             jdbc.update(
                     "INSERT INTO outbox (event_id, topic, message_key, payload, traceparent) VALUES (?, ?, ?, ?, ?)",
                     envelope.eventId(), topic, key, mapper.writeValueAsString(envelope), currentTraceparent());
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("Cannot serialize event for " + topic, e);
         }
         return envelope;

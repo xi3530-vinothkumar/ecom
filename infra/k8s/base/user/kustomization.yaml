@@ -25,5 +25,3 @@ configMapGenerator:
       - JWT_EPHEMERAL_KEY=false
       - JWT_ISSUER=ecom-user-service
       - JWT_AUDIENCE=ecom
-      # browsers get the refresh token only as an HttpOnly cookie in EKS
-      - REFRESH_TOKEN_IN_BODY=false

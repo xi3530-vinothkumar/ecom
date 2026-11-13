@@ -8,7 +8,6 @@ import com.ecom.cart.proto.v1.CartLine;
 import com.ecom.cart.proto.v1.CartServiceGrpc;
 import com.ecom.cart.proto.v1.GetCartRequest;
 import com.ecom.cart.proto.v1.MergeCartRequest;
-import com.ecom.platform.grpc.GrpcServerLifecycle;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
@@ -20,6 +19,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.grpc.server.lifecycle.GrpcServerLifecycle;
 
 class CartGrpcIT extends AbstractCartIT {
 

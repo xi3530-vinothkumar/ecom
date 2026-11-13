@@ -39,7 +39,7 @@ public class StalePendingOrdersGauge {
     @Scheduled(fixedDelayString = "${ecom.order.pending-stale-refresh:60s}", initialDelayString = "5s")
     public void refresh() {
         try {
-            Instant cutoff = Instant.now(clock).minus(props.getPendingStaleAfter());
+            Instant cutoff = Instant.now(clock).minus(props.pendingStaleAfter());
             value.set(orders.countByStatusAndCreatedAtBefore(OrderStatus.PENDING, cutoff));
         } catch (RuntimeException e) {
             log.warn("Could not refresh ecom.order.pending.stale: {}", e.toString());

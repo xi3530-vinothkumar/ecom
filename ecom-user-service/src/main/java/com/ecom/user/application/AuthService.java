@@ -88,7 +88,7 @@ public class AuthService {
         if (passwordEncoder.upgradeEncoding(user.getPasswordHash())) {
             user.changePasswordHash(passwordEncoder.encode(password), now);
         }
-        return tokenIssuer.mint(user, UUID.randomUUID()).tokens();
+        return tokenIssuer.startFamily(user).tokens();
     }
 
     @Transactional(noRollbackFor = EcomException.class)
@@ -99,13 +99,13 @@ public class AuthService {
         RefreshToken presented = refreshTokens.findByTokenHashForUpdate(OpaqueTokens.sha256Hex(rawRefreshToken))
                 .orElseThrow(() -> EcomException.unauthenticated(INVALID_REFRESH_TOKEN));
         Instant now = clock.instant();
-        switch (presented.statusAt(now)) {
+        return switch (presented.statusAt(now)) {
             case ACTIVE -> {
                 User user = users.findById(presented.getUserId())
                         .orElseThrow(() -> EcomException.unauthenticated(INVALID_REFRESH_TOKEN));
-                TokenIssuer.Minted next = tokenIssuer.mint(user, presented.getFamilyId());
+                TokenIssuer.Minted next = tokenIssuer.continueFamily(user, presented);
                 presented.rotateTo(next.refreshToken().getId(), now);
-                return next.tokens();
+                yield next.tokens();
             }
             case ROTATED -> {
                 int revoked = refreshTokens.revokeFamily(presented.getFamilyId(), now);
@@ -113,8 +113,8 @@ public class AuthService {
                         presented.getFamilyId(), presented.getUserId(), revoked);
                 throw EcomException.unauthenticated(INVALID_REFRESH_TOKEN);
             }
-            default -> throw EcomException.unauthenticated(INVALID_REFRESH_TOKEN);
-        }
+            case REVOKED, EXPIRED -> throw EcomException.unauthenticated(INVALID_REFRESH_TOKEN);
+        };
     }
 
     /** Revokes the presented token's whole family. Unknown/blank tokens are a no-op (idempotent logout). */

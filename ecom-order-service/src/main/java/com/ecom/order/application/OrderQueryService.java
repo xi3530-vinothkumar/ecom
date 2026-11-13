@@ -80,7 +80,7 @@ public class OrderQueryService {
     private static Optional<UUID> parse(String raw) {
         try {
             return Optional.of(UUID.fromString(raw));
-        } catch (IllegalArgumentException | NullPointerException e) {
+        } catch (IllegalArgumentException | NullPointerException _) {
             return Optional.empty();
         }
     }

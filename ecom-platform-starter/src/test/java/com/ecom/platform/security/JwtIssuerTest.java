@@ -8,6 +8,7 @@ import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.SignedJWT;
 import java.security.KeyPairGenerator;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -23,9 +24,7 @@ class JwtIssuerTest {
 
     @Test
     void issuesRs256TokenVerifiableViaJwks() throws Exception {
-        var props = new JwtProperties();
-        props.setKeyId("k1");
-        props.setPrivateKeyPem(pkcs8Pem());
+        var props = new JwtProperties("ecom-user-service", "ecom", "k1", pkcs8Pem(), Duration.ofMinutes(15), List.of());
         var issuer = new JwtIssuer(props, Clock.systemUTC());
 
         var token = issuer.issue("user-1", List.of("CUSTOMER"));

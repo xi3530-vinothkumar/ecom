@@ -26,8 +26,8 @@ class ThreeDSecureIT extends SagaTestBase {
         Db.PaymentTx tx = awaitPayment(orderId, "REQUIRES_ACTION");
         await("paymentAction exposed").atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
             var order = api.order(s.userId(), orderId);
-            assertThat(order.path("status").asText()).isEqualTo("PENDING");
-            assertThat(order.path("paymentAction").path("clientSecret").asText()).startsWith(tx.pspReference());
+            assertThat(order.path("status").asString()).isEqualTo("PENDING");
+            assertThat(order.path("paymentAction").path("clientSecret").asString()).startsWith(tx.pspReference());
         });
         return tx.pspReference();
     }
@@ -41,7 +41,7 @@ class ThreeDSecureIT extends SagaTestBase {
         awaitStock(sku, 4, 3);
 
         var order = awaitStatus(s, orderId, "CANCELLED");
-        assertThat(order.path("cancelReason").asText()).isEqualTo("PAYMENT_TIMEOUT");
+        assertThat(order.path("cancelReason").asString()).isEqualTo("PAYMENT_TIMEOUT");
         assertThat(sys.events().count(EventTopics.RESERVATION_EXPIRED, orderId)).isEqualTo(1);
         awaitReservations(orderId, "RELEASED");
         awaitStock(sku, 4, 0);
@@ -52,7 +52,7 @@ class ThreeDSecureIT extends SagaTestBase {
         assertThat(late.status()).as(late.raw()).isIn(200, 409);
         awaitPayment(orderId, "VOIDED");
         await().during(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(6)).untilAsserted(() -> {
-            assertThat(api.order(s.userId(), orderId).path("status").asText()).isEqualTo("CANCELLED");
+            assertThat(api.order(s.userId(), orderId).path("status").asString()).isEqualTo("CANCELLED");
             assertThat(db.paymentTx(orderId).orElseThrow().status()).isEqualTo("VOIDED");
             assertThat(api.stock(sku)).isEqualTo(new Api.Stock(4, 0, 4));
         });
@@ -121,20 +121,20 @@ class ThreeDSecureIT extends SagaTestBase {
         assertThat(r.status()).as(r.raw()).isIn(200, 409);
 
         var order = awaitTerminal(s, orderId);
-        String status = order.path("status").asText();
+        String status = order.path("status").asString();
         if (status.equals("CONFIRMED")) {
             awaitReservations(orderId, "COMMITTED");
             awaitPayment(orderId, "CAPTURED");
             awaitStock(sku, onHand - 1, 0);
         } else {
-            assertThat(order.path("cancelReason").asText()).isEqualTo("PAYMENT_TIMEOUT");
+            assertThat(order.path("cancelReason").asString()).isEqualTo("PAYMENT_TIMEOUT");
             awaitReservations(orderId, "RELEASED");
             awaitPayment(orderId, "VOIDED");
             awaitStock(sku, onHand, 0);
         }
         // and it stays converged (no late flip in either direction)
         await().during(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(6)).untilAsserted(() -> {
-            assertThat(api.order(s.userId(), orderId).path("status").asText()).isEqualTo(status);
+            assertThat(api.order(s.userId(), orderId).path("status").asString()).isEqualTo(status);
             var stock = api.stock(sku);
             assertThat(stock.onHand()).isEqualTo(status.equals("CONFIRMED") ? onHand - 1 : onHand);
             assertThat(stock.reserved()).isZero();

@@ -1,1 +1,1 @@
-org.springframework.boot.env.EnvironmentPostProcessor=com.ecom.platform.observability.PlatformDefaultsEnvironmentPostProcessor
+org.springframework.boot.EnvironmentPostProcessor=com.ecom.platform.observability.PlatformDefaultsEnvironmentPostProcessor

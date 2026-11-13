@@ -7,9 +7,9 @@ import com.ecom.inventory.proto.v1.ReservationStatus;
 import com.ecom.order.proto.v1.OrderStatus;
 import com.ecom.payment.domain.PaymentTransaction;
 import com.ecom.payment.domain.TransactionStatus;
-import com.fasterxml.jackson.databind.JsonNode;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
 
 class PaymentSagaIT extends PaymentIntegrationTestBase {
 
@@ -27,7 +27,7 @@ class PaymentSagaIT extends PaymentIntegrationTestBase {
         assertThat(tx.clientSecret()).isNull();
         assertThat(tx.amountMoney().toBigDecimal()).isEqualByComparingTo("25.90");
         JsonNode event = awaitPublished(EventTopics.PAYMENT_AUTHORIZED, orderId);
-        assertThat(event.path("transactionId").asText()).isEqualTo(tx.id().toString());
+        assertThat(event.path("transactionId").asString()).isEqualTo(tx.id().toString());
         assertThat(event.path("amount").path("units").asLong()).isEqualTo(25);
         assertThat(event.path("amount").path("nanos").asInt()).isEqualTo(900_000_000);
         assertThat(psp.intent(tx.pspReference()).orElseThrow().amountMinor()).isEqualTo(2590);
@@ -45,8 +45,8 @@ class PaymentSagaIT extends PaymentIntegrationTestBase {
         PaymentTransaction tx = awaitStatus(orderId, TransactionStatus.FAILED);
         assertThat(tx.failureReason()).isEqualTo("card_declined");
         JsonNode event = awaitPublished(EventTopics.PAYMENT_FAILED, orderId);
-        assertThat(event.path("reason").asText()).isEqualTo("card_declined");
-        assertThat(event.path("transactionId").asText()).isEqualTo(tx.id().toString());
+        assertThat(event.path("reason").asString()).isEqualTo("card_declined");
+        assertThat(event.path("transactionId").asString()).isEqualTo(tx.id().toString());
         assertThat(outboxCount(EventTopics.PAYMENT_AUTHORIZED, orderId)).isZero();
     }
 
@@ -125,7 +125,7 @@ class PaymentSagaIT extends PaymentIntegrationTestBase {
         resend(EventTopics.ORDER_CANCELLED, orderId, cancel);
 
         PaymentTransaction voided = awaitStatus(orderId, TransactionStatus.VOIDED);
-        assertThat(awaitPublished(EventTopics.PAYMENT_VOIDED, orderId).path("transactionId").asText())
+        assertThat(awaitPublished(EventTopics.PAYMENT_VOIDED, orderId).path("transactionId").asString())
                 .isEqualTo(voided.id().toString());
         assertThat(psp.intent(authorized.pspReference()).orElseThrow().status()).isEqualTo(FakePspClientStatus.CANCELED);
         assertThat(psp.cancelCalls(authorized.pspReference())).isEqualTo(1);

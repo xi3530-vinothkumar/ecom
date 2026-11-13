@@ -29,7 +29,7 @@ final class CartOwnerResolver {
             if (id.toString().equalsIgnoreCase(raw)) {
                 return id;
             }
-        } catch (IllegalArgumentException ignored) {
+        } catch (IllegalArgumentException _) {
             // fall through
         }
         throw EcomException.validation(GUEST_HEADER + " must be a UUID");

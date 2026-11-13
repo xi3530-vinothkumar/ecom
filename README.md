@@ -1,6 +1,6 @@
 # ecom — e-commerce microservices platform
 
-Java 21 / Spring Boot 3.4 microservices for an e-commerce platform. The MVP covers catalog, search, cart, checkout, payment and accounts.
+Java 25 / Spring Boot 4.1 microservices for an e-commerce platform. The MVP covers catalog, search, cart, checkout, payment and accounts.
 Service-to-service calls use gRPC, async events go over Kafka through a transactional outbox, and the edge is Spring Cloud Gateway with RS256 JWTs.
 Local development runs on Docker Compose, production targets AWS EKS (Terraform + Kustomize), and CI/CD runs on GitHub Actions.
 
@@ -12,7 +12,7 @@ Local development runs on Docker Compose, production targets AWS EKS (Terraform 
 |---|---|
 | `ecom-common-proto` | gRPC contracts (`ecom/<domain>/v1/*.proto`) |
 | `ecom-common-events` | Kafka `EventEnvelope`, payloads, `Money`, canonical `kafka-topics.yaml` |
-| `ecom-platform-starter` | Auto-configured platform: outbox relay, idempotent consumer + DLT, gRPC server/clients with context propagation + Resilience4j, trusted-header web filter, problem+json, RS256 JWT issuer, JSON logs with PII masking, actuator/OTel defaults |
+| `ecom-platform-starter` | Auto-configured platform: outbox relay, idempotent consumer + DLT, Spring gRPC server/clients with context propagation + Spring Cloud CircuitBreaker, trusted-header web filter, problem+json, RS256 JWT issuer, Spring Boot structured JSON logs with PII masking, virtual threads, actuator/OTel defaults |
 | `ecom-common-testing` | Testcontainers singletons (Postgres, Kafka, Redis, Elasticsearch) + Kafka helpers |
 | `ecom-gateway` | Edge: routing allow-list, header sanitizing, JWKS validation, claims propagation, Redis rate limiting |
 | `ecom-user-service` | Accounts, addresses, login/refresh-rotation/logout, JWKS |

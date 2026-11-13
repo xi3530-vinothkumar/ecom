@@ -1,6 +1,20 @@
 spring:
   application:
     name: cart-service
+  grpc:
+    server:
+      port: ${GRPC_PORT:9094}
+    client:
+      channel:
+        catalog:
+          target: ${CATALOG_GRPC_ADDRESS:localhost:9092}
+          default:
+            deadline: 2s
+          keepalive:
+            time: 30s
+  cache:
+    # Redis is on the classpath for carts; the catalog L1 cache is in-process
+    type: caffeine
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -15,12 +29,6 @@ management:
         readiness:
           include: readinessState,redis
 ecom:
-  grpc:
-    server:
-      port: ${GRPC_PORT:9094}
-    clients:
-      catalog:
-        address: ${CATALOG_GRPC_ADDRESS:localhost:9092}
   kafka:
     create-topics: ${KAFKA_CREATE_TOPICS:false}
   cart:

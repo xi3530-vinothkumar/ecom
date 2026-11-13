@@ -102,7 +102,8 @@ public class PaymentSagaService {
             case AUTHORIZED -> events.authorized(tx);
             case FAILED -> events.failed(tx);
             // customer must complete 3DS; the PSP webhook decides (PspWebhookService)
-            default -> log.info("Order {} payment requires customer action ({})", orderId, tx.pspReference());
+            case REQUIRES_ACTION -> log.info("Order {} payment requires customer action ({})", orderId, tx.pspReference());
+            case VOIDED, CAPTURED -> log.warn("Order {} new authorization unexpectedly {}", orderId, tx.status());
         }
     }
 
@@ -134,7 +135,8 @@ public class PaymentSagaService {
                 tx.markCaptured(clock.instant());
                 log.info("Captured payment {} for order {}", tx.id(), orderId);
             }
-            default -> log.error("Order {} confirmed but payment {} is {}; not capturing", orderId, tx.id(), tx.status());
+            case REQUIRES_ACTION, FAILED, VOIDED ->
+                    log.error("Order {} confirmed but payment {} is {}; not capturing", orderId, tx.id(), tx.status());
         }
     }
 

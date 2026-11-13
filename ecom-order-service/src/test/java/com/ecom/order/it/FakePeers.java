@@ -19,7 +19,7 @@ import com.ecom.user.proto.v1.UserServiceGrpc;
 import io.grpc.BindableService;
 import io.grpc.Server;
 import io.grpc.Status;
-import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
+import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
 import java.io.IOException;
 import java.io.UncheckedIOException;

@@ -1,5 +1,6 @@
 package com.ecom.payment.it;
 
+import static com.ecom.testing.RestCalls.exchange;
 import static org.awaitility.Awaitility.await;
 
 import com.ecom.common.events.EventEnvelope;
@@ -14,37 +15,38 @@ import com.ecom.payment.domain.TransactionType;
 import com.ecom.payment.infrastructure.persistence.PaymentTransactionRepository;
 import com.ecom.payment.infrastructure.psp.FakePspClient;
 import com.ecom.payment.infrastructure.psp.StripeSignatureVerifier;
+import com.ecom.testing.ContainerConfigs;
 import com.ecom.testing.Containers;
 import com.ecom.testing.KafkaTestSupport;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.servlet.client.RestTestClient;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /** One shared context (same config in every IT): Postgres + Kafka containers, fake PSP, fake peers. */
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
-            "ecom.grpc.server.port=0",
+            "spring.grpc.server.port=0",
             "ecom.payment.psp=fake",
             "ecom.outbox.poll-interval=100ms",
             "spring.profiles.active=plain-logs"
         })
-@Import(PaymentItConfig.class)
+@Import({ContainerConfigs.Postgres.class, ContainerConfigs.Kafka.class, PaymentItConfig.class})
+@AutoConfigureRestTestClient
 public abstract class PaymentIntegrationTestBase {
 
     protected static final Duration TIMEOUT = Duration.ofSeconds(30);
@@ -52,18 +54,12 @@ public abstract class PaymentIntegrationTestBase {
     protected static final String DECLINED = "pm_card_chargeDeclined";
     protected static final String THREE_DS = "pm_card_threeDSecure2Required";
 
-    @DynamicPropertySource
-    static void containers(DynamicPropertyRegistry r) {
-        Containers.registerPostgres(r);
-        Containers.registerKafka(r);
-    }
-
     @Autowired protected FakePeers peers;
     @Autowired protected FakePspClient psp;
     @Autowired protected PaymentTransactionRepository transactions;
     @Autowired protected JdbcTemplate jdbc;
     @Autowired protected ObjectMapper mapper;
-    @Autowired protected TestRestTemplate rest;
+    @Autowired protected RestTestClient rest;
     @Autowired protected StripeSignatureVerifier signer;
 
     protected String bootstrap() {
@@ -114,7 +110,7 @@ public abstract class PaymentIntegrationTestBase {
 
     protected JsonNode awaitPublished(String topic, UUID orderId) {
         List<EventEnvelope> found = KafkaTestSupport.await(bootstrap(), mapper, topic,
-                env -> orderId.toString().equals(env.payload().path("orderId").asText()), TIMEOUT);
+                env -> orderId.toString().equals(env.payload().path("orderId").asString()), TIMEOUT);
         if (found.isEmpty()) {
             throw new AssertionError("No " + topic + " event for order " + orderId);
         }
@@ -127,10 +123,11 @@ public abstract class PaymentIntegrationTestBase {
         if (signature != null) {
             headers.set(StripeSignatureVerifier.HEADER, signature);
         }
-        return rest.postForEntity("/webhooks/psp", new HttpEntity<>(body, headers), String.class);
+        return exchange(rest, HttpMethod.POST, "/webhooks/psp", body, headers, String.class);
     }
 
     protected ResponseEntity<String> completeAction(String pspReference, String outcome) {
-        return rest.postForEntity("/dev/psp/complete-action/" + pspReference + "?outcome=" + outcome, null, String.class);
+        String path = "/dev/psp/complete-action/" + pspReference + "?outcome=" + outcome;
+        return exchange(rest, HttpMethod.POST, path, null, new HttpHeaders(), String.class);
     }
 }

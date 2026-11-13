@@ -1,42 +1,34 @@
 package com.ecom.platform.grpc;
 
 import io.grpc.Channel;
-import io.grpc.ClientInterceptors;
 import io.grpc.ManagedChannel;
-import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
-import org.springframework.beans.factory.DisposableBean;
+import org.springframework.grpc.client.GrpcChannelFactory;
 
 /**
- * Named outbound channels from {@code ecom.grpc.clients.<name>.address}, with correlation/auth
- * propagation and default deadline applied. Usage:
- * {@code CatalogServiceGrpc.newBlockingStub(channels.channel("catalog"))}.
+ * One cached channel per peer, created by Spring gRPC's {@link GrpcChannelFactory} from
+ * {@code spring.grpc.client.channel.<name>.*} (target, default deadline, keepalive). Global client
+ * interceptors (context propagation, observation) are applied by the factory, which also shuts
+ * the channels down. Usage: {@code CatalogServiceGrpc.newBlockingStub(channels.channel("catalog"))}.
  */
-public class GrpcChannels implements DisposableBean {
+public class GrpcChannels {
 
-    private final GrpcProperties props;
-    private final Map<String, ManagedChannel> managed = new ConcurrentHashMap<>();
+    private final GrpcChannelFactory factory;
+    private final Set<String> configured;
+    private final Map<String, ManagedChannel> channels = new ConcurrentHashMap<>();
 
-    public GrpcChannels(GrpcProperties props) {
-        this.props = props;
+    public GrpcChannels(GrpcChannelFactory factory, Set<String> configured) {
+        this.factory = factory;
+        this.configured = Set.copyOf(configured);
     }
 
     public Channel channel(String name) {
-        GrpcProperties.Client client = props.getClients().get(name);
-        if (client == null || client.getAddress() == null) {
-            throw new IllegalStateException("Missing property ecom.grpc.clients." + name + ".address");
+        if (!configured.contains(name)) {
+            // without this, the factory would silently treat the name as a DNS target
+            throw new IllegalStateException("Missing property spring.grpc.client.channel." + name + ".target");
         }
-        ManagedChannel ch = managed.computeIfAbsent(name, n -> NettyChannelBuilder.forTarget(client.getAddress())
-                .usePlaintext()
-                .keepAliveTime(30, TimeUnit.SECONDS)
-                .build());
-        return ClientInterceptors.intercept(ch, new CallContextClientInterceptor(client.getDeadline()));
-    }
-
-    @Override
-    public void destroy() {
-        managed.values().forEach(ManagedChannel::shutdown);
+        return channels.computeIfAbsent(name, factory::createChannel);
     }
 }

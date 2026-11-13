@@ -66,7 +66,7 @@ class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
     private static UUID uuid(String value, String field) {
         try {
             return UUID.fromString(value);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             throw EcomException.validation(field + " must be a UUID");
         }
     }

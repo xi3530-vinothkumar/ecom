@@ -152,8 +152,6 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@ecom.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me-admin-Passw0rd}
       CART_GRPC_ADDRESS: cart-service:9090
-      # non-browser clients (scripts/smoke-test.sh) get the refresh token in the JSON body too
-      REFRESH_TOKEN_IN_BODY: "true"
     depends_on: *db-deps
 
   catalog-service:

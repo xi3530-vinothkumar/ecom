@@ -4,9 +4,6 @@ import com.ecom.payment.application.PspWebhookService;
 import com.ecom.payment.infrastructure.psp.FakePspClient;
 import com.ecom.payment.infrastructure.psp.StripeSignatureVerifier;
 import com.ecom.platform.core.EcomException;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Clock;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -16,6 +13,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Local/e2e stand-in for the customer finishing 3DS in the browser. Builds the Stripe-shaped event
@@ -93,7 +93,7 @@ public class FakePspDevController {
         }
         try {
             return mapper.writeValueAsBytes(event);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException(e);
         }
     }

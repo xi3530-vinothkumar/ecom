@@ -1,0 +1,591 @@
+openapi: 3.0.3
+info:
+  title: ecom user-service
+  version: 0.1.0
+  description: |
+    Identity, credentials, profile, and addresses.
+
+    **Two ways to call it**
+
+    - **Through the Gateway** (`http://localhost:8080`): send `Authorization: Bearer <accessToken>`.
+      The Gateway verifies the JWT, strips any client `X-User-*` headers, and stamps
+      `X-User-Id` / `X-User-Roles` from the verified claims.
+    - **Directly** (`http://localhost:8081`): there is no JWT check in user-service. Authenticated
+      endpoints read the caller from the `X-User-Id` header (a user UUID).
+
+    **Refresh token: browser vs mobile**
+
+    - **Browser** (`/auth/*`): the refresh token travels only in an `HttpOnly; Secure;
+      SameSite=Strict; Path=/auth` cookie, never in a body.
+    - **Mobile / native** (`/auth/mobile/*`): the refresh token travels only in JSON bodies; no
+      cookie is read or set. Requests carrying an `Origin` header (i.e. from a browser) get `403`.
+
+    For Postman use the `/auth/mobile/*` endpoints: Postman does not send `Origin`, and over plain
+    `http` it will not return a `Secure` cookie anyway.
+
+    Errors are RFC 9457 problem details (`application/problem+json`).
+servers:
+  - url: http://localhost:8080
+    description: Gateway (Bearer JWT)
+  - url: http://localhost:8081
+    description: user-service direct (X-User-Id header)
+
+tags:
+  - name: Auth
+    description: Browser clients (refresh token in HttpOnly cookie)
+  - name: Mobile Auth
+    description: Native clients (refresh token in JSON body)
+  - name: Users
+  - name: Addresses
+  - name: Internal
+
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Log in with email + password
+      description: |
+        Issues an access token (JWT, 15 min) and a rotating refresh token (14 days each, but never past the session's absolute end, 30 days after login).
+        If `guestCartId` is given, the guest cart is merged into the user's cart on a best-effort
+        basis (a Cart failure does not fail the login). Repeated failures lock the account
+        (5 failures in 15 min → locked for 15 min); a locked account gets the same 401.
+        Through the Gateway this route is rate limited per client IP (~10 attempts/min).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+            example:
+              email: jane@example.com
+              password: correct-horse-battery
+      responses:
+        '200': { $ref: '#/components/responses/Tokens' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refresh
+      summary: Rotate the refresh token and get a new access token
+      description: |
+        Reads the refresh token from the cookie only; a body is ignored. The presented token is
+        consumed; reusing an already-rotated one revokes the whole session family.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RefreshCookie'
+      responses:
+        '200': { $ref: '#/components/responses/Tokens' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: Revoke the refresh token and clear the cookie
+      description: Idempotent; a missing or unknown cookie still returns `204`.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RefreshCookie'
+      responses:
+        '204':
+          description: Logged out; the refresh cookie is expired.
+          headers:
+            Set-Cookie:
+              description: Refresh cookie cleared (`Max-Age=0`).
+              schema: { type: string }
+
+  /auth/mobile/login:
+    post:
+      tags: [Mobile Auth]
+      operationId: mobileLogin
+      summary: Log in (native client) — tokens in body
+      description: |
+        Same credential checks, lockout and per-IP rate limit as `/auth/login` (the two share one
+        Gateway bucket). Both tokens are returned in the body; no cookie is set. Store the refresh
+        token in iOS Keychain / Android Keystore.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/NoOrigin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+            example:
+              email: jane@example.com
+              password: correct-horse-battery
+      responses:
+        '200': { $ref: '#/components/responses/MobileTokens' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/BrowserRefused' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/mobile/refresh:
+    post:
+      tags: [Mobile Auth]
+      operationId: mobileRefresh
+      summary: Rotate the refresh token (native client)
+      description: |
+        Reads the refresh token from the body only; the browser cookie is ignored on this path.
+        Replace the stored refresh token with the one in the response — the old one is now rotated,
+        and presenting it again revokes the whole session family.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/NoOrigin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MobileRefreshRequest' }
+            example:
+              refreshToken: '{{refreshToken}}'
+      responses:
+        '200': { $ref: '#/components/responses/MobileTokens' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/BrowserRefused' }
+
+  /auth/mobile/logout:
+    post:
+      tags: [Mobile Auth]
+      operationId: mobileLogout
+      summary: Revoke the session (native client)
+      description: Revokes the token's whole family. Idempotent for unknown tokens (`204`).
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/NoOrigin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MobileRefreshRequest' }
+            example:
+              refreshToken: '{{refreshToken}}'
+      responses:
+        '204': { description: Logged out }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { $ref: '#/components/responses/BrowserRefused' }
+
+  /users:
+    post:
+      tags: [Users]
+      operationId: register
+      summary: Register a new account
+      description: Email is trimmed and lower-cased before it is stored.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+            example:
+              email: jane@example.com
+              password: correct-horse-battery
+              fullName: Jane Doe
+              phone: '+31 6 12345678'
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location:
+              schema: { type: string, example: /users/me }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /users/me:
+    get:
+      tags: [Users]
+      operationId: getMe
+      summary: Get the caller's profile
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Users]
+      operationId: updateMe
+      summary: Update the caller's profile
+      description: Omitted (null) fields are left unchanged.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProfileRequest' }
+            example:
+              fullName: Jane Q. Doe
+              phone: '+31 6 87654321'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /users/me/addresses:
+    get:
+      tags: [Addresses]
+      operationId: listAddresses
+      summary: List the caller's addresses
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AddressResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    post:
+      tags: [Addresses]
+      operationId: createAddress
+      summary: Add an address (max 20 per account)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddressRequest' }
+            example:
+              line1: Damrak 1
+              line2: 3rd floor
+              city: Amsterdam
+              postalCode: 1012 LG
+              countryCode: NL
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location:
+              schema: { type: string, example: /users/me/addresses/0b9c3e0e-6f1a-4c1e-9a49-2f4d9f1c1a11 }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AddressResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /users/me/addresses/{addressId}:
+    parameters:
+      - name: addressId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Addresses]
+      operationId: getAddress
+      summary: Get one of the caller's addresses
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AddressResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Addresses]
+      operationId: updateAddress
+      summary: Replace one of the caller's addresses
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddressRequest' }
+            example:
+              line1: Damrak 2
+              city: Amsterdam
+              postalCode: 1012 LG
+              countryCode: NL
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AddressResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Addresses]
+      operationId: deleteAddress
+      summary: Delete one of the caller's addresses
+      responses:
+        '204': { description: Deleted }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /.well-known/jwks.json:
+    get:
+      tags: [Internal]
+      operationId: jwks
+      summary: Public signing keys (JWKS)
+      description: Internal only — not routed by the Gateway. Call on the direct server (8081).
+      servers:
+        - url: http://localhost:8081
+      security: []
+      responses:
+        '200':
+          description: OK (cached 5 min)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Jwks' }
+
+security:
+  - bearerAuth: []
+  - userIdHeader: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token from `/auth/login` or `/auth/refresh`. Use with the Gateway server.
+    userIdHeader:
+      type: apiKey
+      in: header
+      name: X-User-Id
+      description: User UUID. Use only with the direct server; the Gateway strips this header.
+
+  parameters:
+    RefreshCookie:
+      name: refresh_token
+      in: cookie
+      required: false
+      description: |
+        Refresh-token cookie set by login/refresh. Its actual name comes from
+        `ecom.auth.refresh-cookie-name`.
+      schema: { type: string }
+    NoOrigin:
+      name: Origin
+      in: header
+      required: false
+      description: Must be absent. Browsers always send it on POST; requests that carry it get `403`.
+      schema: { type: string }
+
+  headers:
+    SetRefreshCookie:
+      description: Refresh-token cookie (`HttpOnly; Secure; SameSite=Strict`).
+      schema: { type: string }
+    CacheControlNoStore:
+      schema: { type: string, example: no-store }
+    CorrelationId:
+      description: Echoed or generated correlation id.
+      schema: { type: string }
+
+  responses:
+    Tokens:
+      description: Tokens issued
+      headers:
+        Set-Cookie: { $ref: '#/components/headers/SetRefreshCookie' }
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        X-Correlation-Id: { $ref: '#/components/headers/CorrelationId' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/TokenResponse' }
+    MobileTokens:
+      description: Tokens issued (both in body, no cookie)
+      headers:
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        X-Correlation-Id: { $ref: '#/components/headers/CorrelationId' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/MobileTokenResponse' }
+    BrowserRefused:
+      description: Request carried an `Origin` header; mobile endpoints are not available to browsers
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ValidationProblem' }
+    Unauthenticated:
+      description: Missing/invalid credentials, invalid or reused refresh token, or no caller identity
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: about:blank
+            title: Unauthorized
+            status: 401
+            detail: Invalid email or password
+    NotFound:
+      description: Not found
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: An account with this email already exists
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unprocessable:
+      description: Business rule violated (e.g. more than 20 addresses)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    TooManyRequests:
+      description: Rate limited by the Gateway
+      headers:
+        X-RateLimit-Remaining:
+          schema: { type: integer }
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, maxLength: 320 }
+        password: { type: string, maxLength: 1024, format: password }
+        guestCartId:
+          type: string
+          maxLength: 64
+          pattern: '^[A-Za-z0-9_-]*$'
+          description: Guest cart to merge into the user's cart after login.
+
+    MobileRefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string, maxLength: 256 }
+
+    TokenResponse:
+      type: object
+      required: [accessToken, expiresIn, tokenType]
+      properties:
+        accessToken: { type: string, description: Signed JWT }
+        expiresIn: { type: integer, format: int64, description: Seconds until the access token expires, example: 900 }
+        tokenType: { type: string, enum: [Bearer] }
+
+    MobileTokenResponse:
+      type: object
+      required: [accessToken, expiresIn, tokenType, refreshToken, refreshExpiresIn]
+      properties:
+        accessToken: { type: string, description: Signed JWT }
+        expiresIn: { type: integer, format: int64, description: Seconds until the access token expires, example: 900 }
+        tokenType: { type: string, enum: [Bearer] }
+        refreshToken: { type: string, description: Opaque; store in OS secure storage }
+        refreshExpiresIn: { type: integer, format: int64, description: "Seconds until the refresh token expires (min of 14 d and the session's absolute end, 30 d after login)", example: 1209600 }
+
+    RegisterRequest:
+      type: object
+      required: [email, password, fullName]
+      properties:
+        email: { type: string, format: email, maxLength: 320 }
+        password: { type: string, format: password, minLength: 8, maxLength: 128 }
+        fullName: { type: string, maxLength: 200 }
+        phone: { $ref: '#/components/schemas/Phone' }
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 200
+          pattern: '.*\S.*'
+          description: Must not be blank.
+        phone: { $ref: '#/components/schemas/Phone' }
+
+    Phone:
+      type: string
+      maxLength: 32
+      pattern: '^$|^\+?[0-9 ()\-]{5,32}$'
+      example: '+31 6 12345678'
+
+    UserResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        phone: { type: string, nullable: true }
+        roles:
+          type: array
+          uniqueItems: true
+          items: { type: string }
+          example: [CUSTOMER]
+        createdAt: { type: string, format: date-time }
+
+    AddressRequest:
+      type: object
+      required: [line1, city, postalCode, countryCode]
+      properties:
+        line1: { type: string, maxLength: 200 }
+        line2: { type: string, maxLength: 200 }
+        city: { type: string, maxLength: 100 }
+        postalCode: { type: string, maxLength: 20 }
+        countryCode:
+          type: string
+          pattern: '^[A-Za-z]{2}$'
+          description: ISO 3166-1 alpha-2
+          example: NL
+
+    AddressResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        line1: { type: string }
+        line2: { type: string, nullable: true }
+        city: { type: string }
+        postalCode: { type: string }
+        countryCode: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Problem:
+      type: object
+      properties:
+        type: { type: string, example: 'about:blank' }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        correlationId: { type: string }
+
+    ValidationProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          properties:
+            errors:
+              type: object
+              additionalProperties: { type: string }
+              example:
+                email: must be a well-formed email address
+                password: size must be between 8 and 128
+
+    Jwks:
+      type: object
+      properties:
+        keys:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+            properties:
+              kty: { type: string, example: RSA }
+              kid: { type: string, example: local-dev }
+              use: { type: string, example: sig }
+              alg: { type: string, example: RS256 }
+              n: { type: string }
+              e: { type: string }

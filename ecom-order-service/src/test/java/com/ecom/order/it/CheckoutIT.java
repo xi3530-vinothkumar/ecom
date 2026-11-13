@@ -49,13 +49,13 @@ class CheckoutIT extends AbstractOrderIT {
         assertThat(sagaStep(orderId)).isEqualTo("ORDER_CREATED");
 
         List<EventEnvelope> created = KafkaTestSupport.await(Containers.kafka().getBootstrapServers(), mapper,
-                EventTopics.ORDER_CREATED, e -> orderId.toString().equals(e.payload().path("orderId").asText()), TIMEOUT);
+                EventTopics.ORDER_CREATED, e -> orderId.toString().equals(e.payload().path("orderId").asString()), TIMEOUT);
         assertThat(created).hasSize(1);
         EventEnvelope env = created.getFirst();
         assertThat(env.producerService()).isEqualTo("order-service");
-        assertThat(env.payload().path("userId").asText()).isEqualTo(user);
+        assertThat(env.payload().path("userId").asString()).isEqualTo(user);
         assertThat(env.payload().path("lines")).hasSize(2);
-        assertThat(env.payload().path("lines").get(0).path("sku").asText()).isEqualTo("SKU-A");
+        assertThat(env.payload().path("lines").get(0).path("sku").asString()).isEqualTo("SKU-A");
         assertThat(env.payload().path("lines").get(0).path("quantity").asInt()).isEqualTo(2);
     }
 
@@ -84,7 +84,7 @@ class CheckoutIT extends AbstractOrderIT {
         checkout(user, key, "pm_card_visa", "home");
         ResponseEntity<Map> mismatch = checkout(user, key, "pm_card_visa", "work");
 
-        assertThat(mismatch.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(mismatch.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM orders WHERE user_id = ?", Integer.class, user)).isEqualTo(1);
     }
 
@@ -147,7 +147,7 @@ class CheckoutIT extends AbstractOrderIT {
 
         ResponseEntity<Map> res = checkout(user, UUID.randomUUID().toString(), "pm_card_visa", "home");
 
-        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM orders WHERE user_id = ?", Integer.class, user)).isZero();
     }
 
@@ -159,7 +159,7 @@ class CheckoutIT extends AbstractOrderIT {
 
         ResponseEntity<Map> res = checkout(user, UUID.randomUUID().toString(), "pm_card_visa", "home");
 
-        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat((String) res.getBody().get("detail")).contains("SKU-OFF").contains("SKU-GONE").doesNotContain("SKU-A,");
     }
 
@@ -167,7 +167,7 @@ class CheckoutIT extends AbstractOrderIT {
     void unknownShippingAddressIs422() {
         String user = userWithCart();
         ResponseEntity<Map> res = checkout(user, UUID.randomUUID().toString(), "pm_card_visa", "nope");
-        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
     static final class FakeFutures {

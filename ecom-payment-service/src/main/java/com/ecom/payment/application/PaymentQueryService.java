@@ -22,7 +22,7 @@ public class PaymentQueryService {
         UUID id;
         try {
             id = UUID.fromString(orderId);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             throw EcomException.validation("order_id must be a UUID");
         }
         return transactions.findByOrderIdAndType(id, TransactionType.AUTHORIZATION)

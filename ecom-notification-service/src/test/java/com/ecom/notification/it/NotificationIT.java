@@ -1,5 +1,7 @@
 package com.ecom.notification.it;
 
+import com.ecom.testing.ContainerConfigs;
+import org.springframework.context.annotation.Import;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
@@ -18,10 +20,9 @@ import com.ecom.testing.KafkaTestSupport;
 import com.ecom.user.proto.v1.GetUserRequest;
 import com.ecom.user.proto.v1.User;
 import com.ecom.user.proto.v1.UserServiceGrpc;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.grpc.Server;
 import io.grpc.Status;
-import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
+import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -41,11 +42,13 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import tools.jackson.databind.ObjectMapper;
 
+@Import({ContainerConfigs.Postgres.class, ContainerConfigs.Kafka.class})
 @SpringBootTest(
         classes = {NotificationServiceApplication.class, NotificationIT.RecordingSenderConfig.class},
         webEnvironment = SpringBootTest.WebEnvironment.NONE,
-        properties = {"ecom.outbox.poll-interval=1s", "management.tracing.enabled=false"})
+        properties = {"ecom.outbox.poll-interval=1s", "management.tracing.export.enabled=false"})
 class NotificationIT {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
@@ -71,9 +74,7 @@ class NotificationIT {
 
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry r) {
-        Containers.registerPostgres(r);
-        Containers.registerKafka(r);
-        r.add("ecom.grpc.clients.user.address", () -> "localhost:" + FAKE_USER_SERVICE.getPort());
+        r.add("spring.grpc.client.channel.user.target", () -> "localhost:" + FAKE_USER_SERVICE.getPort());
     }
 
     @Autowired JdbcTemplate jdbc;

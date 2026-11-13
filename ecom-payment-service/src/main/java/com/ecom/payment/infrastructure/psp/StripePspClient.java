@@ -4,9 +4,6 @@ import com.ecom.payment.application.psp.AuthorizationResult;
 import com.ecom.payment.application.psp.AuthorizationResult.CardDetails;
 import com.ecom.payment.application.psp.PspClient;
 import com.ecom.payment.application.psp.PspException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.IOException;
 import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +13,9 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Stripe PaymentIntents API (form-encoded). Authorization = PaymentIntent with
@@ -67,13 +67,13 @@ public class StripePspClient implements PspClient {
             return fromIntent(res.body());
         }
         JsonNode error = res.error();
-        String type = error.path("type").asText("");
+        String type = error.path("type").asString("");
         // 402 card_error = the issuer declined; other 400s = the token/request can never succeed
         if (res.status() == 402 || (res.status() == 400 && !"idempotency_error".equals(type))) {
             JsonNode intent = error.path("payment_intent");
-            String reason = firstNonBlank(error.path("decline_code").asText(null), error.path("code").asText(null), type);
+            String reason = firstNonBlank(error.path("decline_code").asString(null), error.path("code").asString(null), type);
             return new AuthorizationResult.Declined(
-                    intent.path("id").asText(null), reason == null ? "declined" : reason, card(error.path("payment_method")));
+                    intent.path("id").asString(null), reason == null ? "declined" : reason, card(error.path("payment_method")));
         }
         throw failure("authorize", res);
     }
@@ -97,17 +97,17 @@ public class StripePspClient implements PspClient {
     }
 
     private AuthorizationResult fromIntent(JsonNode intent) {
-        String id = intent.path("id").asText();
-        String status = intent.path("status").asText();
+        String id = intent.path("id").asString();
+        String status = intent.path("status").asString();
         CardDetails card = card(intent.path("payment_method"));
         return switch (status) {
             case "requires_capture", "succeeded" -> new AuthorizationResult.Authorized(id, card);
             // processing: async method; the outcome arrives by webhook just like a 3DS challenge
             case "requires_action", "processing" ->
-                    new AuthorizationResult.RequiresAction(id, intent.path("client_secret").asText(), card);
+                    new AuthorizationResult.RequiresAction(id, intent.path("client_secret").asString(), card);
             case "requires_payment_method", "canceled" -> {
                 JsonNode err = intent.path("last_payment_error");
-                String reason = firstNonBlank(err.path("decline_code").asText(null), err.path("code").asText(null), status);
+                String reason = firstNonBlank(err.path("decline_code").asString(null), err.path("code").asString(null), status);
                 yield new AuthorizationResult.Declined(id, reason, card);
             }
             default -> throw new PspException("Unexpected payment_intent status " + status + " for " + id);
@@ -117,8 +117,8 @@ public class StripePspClient implements PspClient {
     private static boolean alreadyIn(Response res, String status) {
         JsonNode error = res.error();
         return res.status() == 400
-                && UNEXPECTED_STATE.equals(error.path("code").asText())
-                && status.equals(error.path("payment_intent").path("status").asText());
+                && UNEXPECTED_STATE.equals(error.path("code").asString())
+                && status.equals(error.path("payment_intent").path("status").asString());
     }
 
     private static CardDetails card(JsonNode paymentMethod) {
@@ -126,7 +126,7 @@ public class StripePspClient implements PspClient {
         if (card.isMissingNode()) {
             return CardDetails.UNKNOWN;
         }
-        return new CardDetails(card.path("brand").asText(null), card.path("last4").asText(null));
+        return new CardDetails(card.path("brand").asString(null), card.path("last4").asString(null));
     }
 
     private Response post(String path, String idempotencyKey, MultiValueMap<String, String> form) {
@@ -149,7 +149,7 @@ public class StripePspClient implements PspClient {
     private JsonNode readJson(byte[] bytes) {
         try {
             return mapper.readTree(bytes);
-        } catch (IOException e) {
+        } catch (JacksonException _) {
             return mapper.createObjectNode();
         }
     }
@@ -157,7 +157,7 @@ public class StripePspClient implements PspClient {
     private static PspException failure(String operation, Response res) {
         JsonNode error = res.error();
         String message = "Stripe " + operation + " failed: HTTP " + res.status() + " "
-                + error.path("type").asText("") + "/" + error.path("code").asText("");
+                + error.path("type").asString("") + "/" + error.path("code").asString("");
         log.warn(message);
         return new PspException(message);
     }

@@ -1,27 +1,27 @@
 package com.ecom.cart.it;
 
-import com.ecom.testing.Containers;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ecom.testing.ContainerConfigs;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import tools.jackson.databind.ObjectMapper;
 
 /** One shared context (Redis + Kafka + fake Catalog) for all cart ITs; tests isolate via unique ids/SKUs. */
+@Import({ContainerConfigs.Redis.class, ContainerConfigs.Kafka.class})
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = {"ecom.grpc.server.port=0", "management.tracing.enabled=false"})
+        properties = {"spring.grpc.server.port=0", "management.tracing.export.enabled=false"})
 abstract class AbstractCartIT {
 
     static final FakeCatalog CATALOG = new FakeCatalog();
 
     @DynamicPropertySource
     static void containers(DynamicPropertyRegistry r) {
-        Containers.registerRedis(r);
-        Containers.registerKafka(r);
-        r.add("ecom.grpc.clients.catalog.address", () -> "localhost:" + CATALOG.port());
+        r.add("spring.grpc.client.channel.catalog.target", () -> "localhost:" + CATALOG.port());
     }
 
     @Autowired protected StringRedisTemplate redis;

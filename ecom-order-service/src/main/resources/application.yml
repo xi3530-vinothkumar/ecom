@@ -1,6 +1,35 @@
 spring:
   application:
     name: order-service
+  grpc:
+    server:
+      port: ${GRPC_PORT:9095}
+    client:
+      channel:
+        cart:
+          target: ${CART_GRPC_ADDRESS:localhost:9094}
+          default:
+            deadline: 2s
+          keepalive:
+            time: 30s
+        catalog:
+          target: ${CATALOG_GRPC_ADDRESS:localhost:9092}
+          default:
+            deadline: 2s
+          keepalive:
+            time: 30s
+        user:
+          target: ${USER_GRPC_ADDRESS:localhost:9091}
+          default:
+            deadline: 2s
+          keepalive:
+            time: 30s
+        payment:
+          target: ${PAYMENT_GRPC_ADDRESS:localhost:9096}
+          default:
+            deadline: 2s
+          keepalive:
+            time: 30s
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/orderdb}
     username: ${DB_USERNAME:order}
@@ -8,18 +37,6 @@ spring:
 server:
   port: ${HTTP_PORT:8085}
 ecom:
-  grpc:
-    server:
-      port: ${GRPC_PORT:9095}
-    clients:
-      cart:
-        address: ${CART_GRPC_ADDRESS:localhost:9094}
-      catalog:
-        address: ${CATALOG_GRPC_ADDRESS:localhost:9092}
-      user:
-        address: ${USER_GRPC_ADDRESS:localhost:9091}
-      payment:
-        address: ${PAYMENT_GRPC_ADDRESS:localhost:9096}
   kafka:
     create-topics: ${KAFKA_CREATE_TOPICS:false}
   order:
